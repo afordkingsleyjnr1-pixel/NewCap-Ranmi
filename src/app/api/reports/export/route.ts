@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   });
 
   const headers = ["Firm Name", "HQ", "Strategies", "Focus Areas", "AUM", "Within Mandate", "CRM Stage", "Owner", "Primary Contact", "Email", "Email Status"];
-  const rows = firms.map((f) => [
+  const rows = firms.map((f: any) => [
     f.name,
     f.hqLocation ?? "",
     Object.keys(f.strategies as Record<string, string[]>).join("; "),

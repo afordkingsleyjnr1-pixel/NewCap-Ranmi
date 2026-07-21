@@ -18,7 +18,7 @@ export async function GET() {
 
   const threads = await prisma.emailThread.findMany({ where: { firm: { deletedAt: null, ...scope } } });
   const sent = threads.length;
-  const replied = threads.filter((t) => t.status === "replied").length;
+  const replied = threads.filter((t: any) => t.status === "replied").length;
   const responseRate = sent > 0 ? Math.round((replied / sent) * 1000) / 10 : 0;
 
   const closedWon = await prisma.crmStageRow.findMany({
