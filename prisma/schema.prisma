@@ -1,0 +1,447 @@
+// NewCap-Ranmi — RE Manager Capital-Introduction BD & CRM Platform
+// Full data model per Section 4 of the build spec.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Enums
+// ────────────────────────────────────────────────────────────────────────
+
+enum DomainResolutionStatus {
+  resolved
+  ambiguous
+  unresolved
+}
+
+enum AumConfidence {
+  confirmed
+  dated
+  unconfirmed
+}
+
+enum WithinMandate {
+  yes
+  no
+  unconfirmed
+}
+
+enum ClassificationStatus {
+  unclassified
+  classified
+  needs_review
+}
+
+enum ClassificationSource {
+  engine
+  manual_override
+  engine_then_edited
+}
+
+enum SourceType {
+  seed
+  manual_add
+  comparable
+}
+
+enum EmailStatus {
+  verified
+  inferred
+  unknown
+}
+
+enum CrmStage {
+  not_contacted
+  researched_ready_for_outreach
+  outreach_sent
+  follow_up_due
+  no_response
+  responded_interested
+  responded_not_interested
+  meeting_scheduled
+  in_discussion_diligence
+  term_sheet_loi
+  closed_won
+  closed_lost
+  on_hold_nurture
+  do_not_contact
+}
+
+enum ActivityType {
+  email_sent
+  email_received
+  call
+  meeting
+  note
+  stage_change
+}
+
+enum UserStatus {
+  active
+  pending_invite
+  deactivated
+}
+
+enum EmailProvider {
+  gmail
+  outlook
+}
+
+enum EmailConnectionStatus {
+  connected
+  needs_reauth
+  disconnected
+}
+
+enum ThreadStatus {
+  awaiting_reply
+  replied
+  no_response
+}
+
+enum MessageDirection {
+  outbound
+  inbound
+}
+
+enum MeetingStatus {
+  scheduled
+  completed
+  canceled
+}
+
+enum TaskStatus {
+  open
+  done
+}
+
+enum PopulateMode {
+  similar_to_firm
+  by_criteria
+  database_wide
+}
+
+enum DataScope {
+  all_firms
+  owned_firms_only
+}
+
+enum NotificationType {
+  reply_received
+  role_changed
+  firms_reassigned
+  email_needs_reauth
+  meeting_reminder
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Core: Roles & Users
+// ────────────────────────────────────────────────────────────────────────
+
+model Role {
+  id               String    @id @default(uuid())
+  name             String
+  permissions      Json      @default("[]") // array of permission keys, Section 5.13
+  dataScope        DataScope @default(all_firms) @map("data_scope")
+  isSystemDefault  Boolean   @default(false) @map("is_system_default")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id              String     @id @default(uuid())
+  email           String     @unique
+  name            String
+  passwordHash    String?    @map("password_hash")
+  roleId          String     @map("role_id")
+  role            Role       @relation(fields: [roleId], references: [id])
+  isAccountOwner  Boolean    @default(false) @map("is_account_owner")
+  status          UserStatus @default(pending_invite)
+  invitedById     String?    @map("invited_by")
+  invitedBy       User?      @relation("Invites", fields: [invitedById], references: [id])
+  invitedUsers    User[]     @relation("Invites")
+  invitedAt       DateTime?  @map("invited_at")
+  joinedAt        DateTime?  @map("joined_at")
+
+  emailConnection   EmailConnection?
+  ownedCrmStages    CrmStageRow[]     @relation("StageOwner")
+  ownedTasks        Task[]            @relation("TaskOwner")
+  activityLogs      ActivityLog[]     @relation("ActivityCreatedBy")
+  notifications     Notification[]
+  populateRuns      PopulateRun[]
+  deletedFirms      Firm[]            @relation("FirmDeletedBy")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Firms & Contacts
+// ────────────────────────────────────────────────────────────────────────
+
+model Firm {
+  id                      String                  @id @default(uuid())
+  name                    String
+  domain                  String?
+  domainResolutionStatus  DomainResolutionStatus? @map("domain_resolution_status")
+  hqLocation              String?                 @map("hq_location")
+  targetMarkets           String[]                @default([]) @map("target_markets")
+
+  aumValue      Decimal?      @map("aum_value") @db.Decimal(20, 2)
+  aumDisplay    String?       @map("aum_display")
+  aumAsOf       DateTime?     @map("aum_as_of") @db.Date
+  aumConfidence AumConfidence? @map("aum_confidence")
+
+  withinMandate       WithinMandate @default(unconfirmed) @map("within_mandate")
+  withinMandateManual Boolean       @default(false) @map("within_mandate_manual")
+
+  strategies  Json @default("{}")
+  focusAreas  Json @default("{}") @map("focus_areas")
+
+  strategyDetail String? @map("strategy_detail") @db.Text
+
+  classificationStatus ClassificationStatus @default(unclassified) @map("classification_status")
+  classificationSource ClassificationSource? @map("classification_source")
+  classifiedAt         DateTime?             @map("classified_at")
+
+  sourceType     SourceType @default(manual_add) @map("source_type")
+  similarTo      String[]   @default([]) @map("similar_to")
+  populateRunId  String?    @map("populate_run_id")
+  populateRun    PopulateRun? @relation(fields: [populateRunId], references: [id])
+
+  deletedAt DateTime? @map("deleted_at")
+  deletedById String? @map("deleted_by")
+  deletedBy User? @relation("FirmDeletedBy", fields: [deletedById], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contacts        Contact[]
+  crmStage        CrmStageRow?
+  activityLog     ActivityLog[]
+  researchSources ResearchSource[]
+  emailThreads    EmailThread[]
+  meetings        Meeting[]
+  tasks           Task[]
+  comparablesFrom PopulateRun[] @relation("SeedFirm")
+
+  @@map("firms")
+}
+
+model Contact {
+  id               String      @id @default(uuid())
+  firmId           String      @map("firm_id")
+  firm             Firm        @relation(fields: [firmId], references: [id])
+  name             String
+  title            String?
+  email            String?
+  emailStatus      EmailStatus @default(unknown) @map("email_status")
+  emailSource      String?     @map("email_source")
+  linkedinUrl      String?     @map("linkedin_url")
+  rank             Int         @default(1)
+  isPrimaryBdContact Boolean   @default(false) @map("is_primary_bd_contact")
+  removedAt        DateTime?   @map("removed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  activityLog  ActivityLog[]
+  emailThreads EmailThread[]
+  meetings     Meeting[]
+
+  @@map("contacts")
+}
+
+model CrmStageRow {
+  id                String    @id @default(uuid())
+  firmId            String    @unique @map("firm_id")
+  firm              Firm      @relation(fields: [firmId], references: [id])
+  stage             CrmStage  @default(not_contacted)
+  stageChangedAt    DateTime  @default(now()) @map("stage_changed_at")
+  ownerId           String?   @map("owner")
+  owner             User?     @relation("StageOwner", fields: [ownerId], references: [id])
+  nextFollowUpDate  DateTime? @map("next_follow_up_date") @db.Date
+  dealNotes         String?   @map("deal_notes") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("crm_stages")
+}
+
+model ActivityLog {
+  id        String       @id @default(uuid())
+  firmId    String       @map("firm_id")
+  firm      Firm         @relation(fields: [firmId], references: [id])
+  contactId String?      @map("contact_id")
+  contact   Contact?     @relation(fields: [contactId], references: [id])
+  type      ActivityType
+  body      String       @db.Text
+  createdAt DateTime     @default(now()) @map("created_at")
+  createdById String?    @map("created_by")
+  createdBy   User?      @relation("ActivityCreatedBy", fields: [createdById], references: [id])
+  deletable Boolean      @default(false) // true only for manually-added note/call entries
+
+  @@map("activity_log")
+}
+
+model ResearchSource {
+  id                     String   @id @default(uuid())
+  entityType             String   @map("entity_type") // "firm" | "contact"
+  entityId               String   @map("entity_id")
+  fieldName              String   @map("field_name")
+  sourceUrlOrDescription String   @map("source_url_or_description") @db.Text
+  retrievedAt            DateTime @default(now()) @map("retrieved_at")
+
+  firm Firm? @relation(fields: [entityId], references: [id], map: "research_sources_firm_fkey")
+
+  @@map("research_sources")
+  @@index([entityType, entityId])
+}
+
+model MandateSettings {
+  id      Int     @id @default(1)
+  aumMin  Decimal @default(1000000000) @map("aum_min") @db.Decimal(20, 2)
+  aumMax  Decimal @default(15000000000) @map("aum_max") @db.Decimal(20, 2)
+
+  @@map("mandate_settings")
+}
+
+model AppSettings {
+  id                    Int    @id @default(1)
+  hunterApiKeyEncrypted String? @map("hunter_api_key_encrypted")
+  followUpThresholdDays Int    @default(7) @map("follow_up_threshold_days")
+
+  @@map("app_settings")
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Email / Calendar
+// ────────────────────────────────────────────────────────────────────────
+
+model EmailConnection {
+  id             String                 @id @default(uuid())
+  userId         String                 @unique @map("user_id")
+  user           User                   @relation(fields: [userId], references: [id])
+  provider       EmailProvider
+  oauthTokenRef  String                 @map("oauth_token_ref") // encrypted access+refresh token blob
+  connectedEmail String                 @map("connected_email")
+  status         EmailConnectionStatus  @default(connected)
+  watchExpiresAt DateTime?              @map("watch_expires_at")
+  connectedAt    DateTime               @default(now()) @map("connected_at")
+
+  @@map("email_connections")
+}
+
+model EmailThread {
+  id                   String       @id @default(uuid())
+  firmId               String       @map("firm_id")
+  firm                 Firm         @relation(fields: [firmId], references: [id])
+  contactId            String?      @map("contact_id")
+  contact              Contact?     @relation(fields: [contactId], references: [id])
+  adHocRecipientName   String?      @map("ad_hoc_recipient_name")
+  adHocRecipientEmail  String?      @map("ad_hoc_recipient_email")
+  subject              String
+  providerThreadId     String?      @map("provider_thread_id")
+  status               ThreadStatus @default(awaiting_reply)
+  followUpSentAt       DateTime?    @map("follow_up_sent_at")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  lastActivityAt       DateTime     @default(now()) @map("last_activity_at")
+
+  messages EmailMessage[]
+
+  @@map("email_threads")
+}
+
+model EmailMessage {
+  id         String            @id @default(uuid())
+  threadId   String            @map("thread_id")
+  thread     EmailThread       @relation(fields: [threadId], references: [id])
+  direction  MessageDirection
+  body       String            @db.Text
+  isFollowUp Boolean           @default(false) @map("is_follow_up")
+  sentAt     DateTime          @default(now()) @map("sent_at")
+
+  @@map("email_messages")
+}
+
+model Meeting {
+  id                  String        @id @default(uuid())
+  firmId              String        @map("firm_id")
+  firm                Firm          @relation(fields: [firmId], references: [id])
+  contactId           String?       @map("contact_id")
+  contact             Contact?      @relation(fields: [contactId], references: [id])
+  adHocRecipientName  String?       @map("ad_hoc_recipient_name")
+  adHocRecipientEmail String?       @map("ad_hoc_recipient_email")
+  title               String
+  startTime           DateTime      @map("start_time")
+  endTime             DateTime      @map("end_time")
+  locationOrLink      String?       @map("location_or_link")
+  agendaNotes         String?       @map("agenda_notes") @db.Text
+  providerEventId     String?       @map("provider_event_id")
+  status              MeetingStatus @default(scheduled)
+  notesLoggedAt        DateTime?    @map("notes_logged_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+
+  @@map("meetings")
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  firmId         String     @map("firm_id")
+  firm           Firm       @relation(fields: [firmId], references: [id])
+  title          String
+  description    String?    @db.Text
+  dueDate        DateTime?  @map("due_date") @db.Date
+  status         TaskStatus @default(open)
+  isFromTemplate Boolean    @default(false) @map("is_from_template")
+  ownerId        String?    @map("owner")
+  owner          User?      @relation("TaskOwner", fields: [ownerId], references: [id])
+  createdAt      DateTime   @default(now()) @map("created_at")
+  completedAt    DateTime?  @map("completed_at")
+
+  @@map("tasks")
+}
+
+model PopulateRun {
+  id                     String       @id @default(uuid())
+  mode                   PopulateMode
+  seedFirmId             String?      @map("seed_firm_id")
+  seedFirm               Firm?        @relation("SeedFirm", fields: [seedFirmId], references: [id])
+  criteria               Json?
+  triggeredById          String       @map("triggered_by")
+  triggeredBy            User         @relation(fields: [triggeredById], references: [id])
+  triggeredAt            DateTime     @default(now()) @map("triggered_at")
+  firmsFound             Int          @default(0) @map("firms_found")
+  firmsAdded             Int          @default(0) @map("firms_added")
+  firmsSkippedDuplicate  Int          @default(0) @map("firms_skipped_duplicate")
+
+  firmsProduced Firm[]
+
+  @@map("populate_runs")
+}
+
+model Notification {
+  id             String           @id @default(uuid())
+  userId         String           @map("user_id")
+  user           User             @relation(fields: [userId], references: [id])
+  type           NotificationType
+  relatedFirmId  String?          @map("related_firm_id")
+  body           String
+  isRead         Boolean          @default(false) @map("is_read")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@map("notifications")
+}

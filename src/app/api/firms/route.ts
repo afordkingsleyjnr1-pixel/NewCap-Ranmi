@@ -1,0 +1,106 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
+import { requirePermission, firmScopeWhere, ForbiddenError } from "@/lib/authz";
+import { findDuplicate } from "@/lib/services/dedupe";
+import { runFirmResearchPipeline } from "@/lib/services/firm-pipeline";
+import { Prisma } from "@/generated/prisma";
+
+export async function GET(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const strategyParent = searchParams.get("strategyParent");
+  const focusParent = searchParams.get("focusParent");
+  const stage = searchParams.get("stage");
+  const sourceType = searchParams.get("sourceType");
+  const classificationStatus = searchParams.get("classificationStatus");
+  const domainResolutionStatus = searchParams.get("domainResolutionStatus");
+  const hqRegion = searchParams.get("hqRegion");
+  const withinMandate = searchParams.get("withinMandate");
+  const similarToFirmId = searchParams.get("similarTo");
+  const search = searchParams.get("q");
+  const includeDeleted = searchParams.get("includeDeleted") === "true";
+
+  const scope = await firmScopeWhere(user);
+
+  const where: Prisma.FirmWhereInput = {
+    ...scope,
+    deletedAt: includeDeleted ? undefined : null,
+  };
+
+  if (search) where.name = { contains: search, mode: "insensitive" };
+  if (sourceType) where.sourceType = sourceType as Prisma.EnumSourceTypeFilter["equals"];
+  if (classificationStatus) where.classificationStatus = classificationStatus as never;
+  if (domainResolutionStatus) where.domainResolutionStatus = domainResolutionStatus as never;
+  if (withinMandate) where.withinMandate = withinMandate as never;
+  if (hqRegion) where.hqLocation = { contains: hqRegion, mode: "insensitive" };
+  if (similarToFirmId) where.similarTo = { has: similarToFirmId };
+  if (strategyParent) where.strategies = { path: [strategyParent], not: Prisma.JsonNull } as never;
+  if (focusParent) where.focusAreas = { path: [focusParent], not: Prisma.JsonNull } as never;
+  if (stage) where.crmStage = { stage: stage as never };
+
+  const firms = await prisma.firm.findMany({
+    where,
+    include: {
+      crmStage: { include: { owner: { select: { id: true, name: true } } } },
+      contacts: { where: { removedAt: null }, orderBy: { rank: "asc" }, take: 1 },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 500,
+  });
+
+  return NextResponse.json({ firms });
+}
+
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  try {
+    await requirePermission(user, "edit_firms");
+  } catch (e) {
+    if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
+    throw e;
+  }
+
+  const body = await req.json();
+  const namesRaw: string = body.names ?? "";
+  const names = String(namesRaw)
+    .split(/[\n,]/)
+    .map((n) => n.trim())
+    .filter(Boolean);
+
+  if (names.length === 0) {
+    return NextResponse.json({ error: "Provide at least one firm name" }, { status: 400 });
+  }
+
+  const added: { id: string; name: string }[] = [];
+  const needsDomainConfirmation: { id: string; name: string }[] = [];
+  const skippedDuplicates: string[] = [];
+
+  for (const name of names) {
+    const dup = await findDuplicate({ name });
+    if (dup) {
+      skippedDuplicates.push(`${name} (matches existing "${dup.name}")`);
+      continue;
+    }
+
+    const outcome = await runFirmResearchPipeline({ name, sourceType: "manual_add" });
+    if (outcome.domainResolutionStatus === "resolved") {
+      added.push({ id: outcome.firmId, name: outcome.name });
+    } else {
+      needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
+    }
+  }
+
+  return NextResponse.json({
+    summary: {
+      addedCount: added.length,
+      needsDomainConfirmationCount: needsDomainConfirmation.length,
+      skippedDuplicateCount: skippedDuplicates.length,
+    },
+    added,
+    needsDomainConfirmation,
+    skippedDuplicates,
+  });
+}
