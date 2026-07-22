@@ -38,7 +38,13 @@ export function PopulateModal({
   const [aumMax, setAumMax] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ firmsFound: number; firmsAdded: number; firmsSkippedDuplicate: number; addedFirms: { id: string; name: string }[] } | null>(null);
+  const [result, setResult] = useState<{
+    firmsFound: number;
+    firmsAdded: number;
+    firmsSkippedDuplicate: number;
+    addedFirms: { id: string; name: string }[];
+    researchWarnings?: string[];
+  } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -169,6 +175,16 @@ export function PopulateModal({
                 </li>
               ))}
             </ul>
+          )}
+          {!!result.researchWarnings?.length && (
+            <div className="rounded-md bg-status-amber-bg p-2.5">
+              <p className="mb-1 text-xs font-medium text-status-amber">Some issues came up during research:</p>
+              <ul className="text-xs text-status-amber">
+                {result.researchWarnings.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
           )}
           <div className="flex justify-end">
             <Button onClick={() => onOpenChange(false)}>Done</Button>
