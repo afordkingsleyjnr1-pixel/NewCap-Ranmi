@@ -90,6 +90,30 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
     setBusy(null);
   }
 
+  async function deleteContact(contactId: string, contactName: string) {
+    if (!confirm(`Delete contact ${contactName}? This cannot be undone.`)) return;
+    setBusy(`contact-${contactId}`);
+    await fetch(`/api/contacts/${contactId}`, { method: "DELETE" });
+    await load();
+    onChanged();
+    setBusy(null);
+  }
+
+  async function deleteTask(taskId: string, taskTitle: string) {
+    if (!confirm(`Delete task "${taskTitle}"? This cannot be undone.`)) return;
+    setBusy(`task-${taskId}`);
+    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    await load();
+    onChanged();
+    setBusy(null);
+  }
+
+  async function toggleTaskDone(taskId: string, currentStatus: string) {
+    await fetch(`/api/tasks/${taskId}`, { method: "PATCH", body: JSON.stringify({ status: currentStatus === "done" ? "open" : "done" }) });
+    await load();
+    onChanged();
+  }
+
   return (
     <>
       <Drawer
@@ -265,9 +289,19 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                         <p className="text-xs text-text-secondary">{c.title ?? "—"}</p>
                         <p className="text-xs text-text-secondary">{c.email ?? "no email found"}</p>
                       </div>
-                      <Pill color={c.emailStatus === "verified" ? "green" : c.emailStatus === "inferred" ? "amber" : "gray"}>
-                        {c.emailStatus}
-                      </Pill>
+                      <div className="flex items-center gap-2">
+                        <Pill color={c.emailStatus === "verified" ? "green" : c.emailStatus === "inferred" ? "amber" : "gray"}>
+                          {c.emailStatus}
+                        </Pill>
+                        <button
+                          onClick={() => deleteContact(c.id, c.name)}
+                          disabled={busy === `contact-${c.id}`}
+                          className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red"
+                          title="Delete contact permanently"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {firm.contacts.length === 0 && <p className="text-xs text-text-secondary">No contacts yet.</p>}
@@ -292,8 +326,26 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                 <div className="space-y-2">
                   {firm.tasks.map((t: any) => (
                     <div key={t.id} className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
-                      <span className={t.status === "done" ? "text-text-secondary line-through" : "text-text-primary"}>{t.title}</span>
-                      <span className="text-xs text-text-secondary">{t.dueDate ? formatDate(t.dueDate) : "no due date"}</span>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={t.status === "done"}
+                          onChange={() => toggleTaskDone(t.id, t.status)}
+                          className="h-3.5 w-3.5 rounded border-border"
+                        />
+                        <span className={t.status === "done" ? "text-text-secondary line-through" : "text-text-primary"}>{t.title}</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-text-secondary">{t.dueDate ? formatDate(t.dueDate) : "no due date"}</span>
+                        <button
+                          onClick={() => deleteTask(t.id, t.title)}
+                          disabled={busy === `task-${t.id}`}
+                          className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red"
+                          title="Delete task permanently"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {firm.tasks.length === 0 && <p className="text-xs text-text-secondary">No tasks yet.</p>}
