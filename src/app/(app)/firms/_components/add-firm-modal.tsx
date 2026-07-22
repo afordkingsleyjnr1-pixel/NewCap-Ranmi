@@ -3,9 +3,11 @@
 import { useState } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/input";
+import { Textarea, Input, Label } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
+import { TaxonomyPicker } from "./taxonomy-picker";
+import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
 
 interface AddFirmSummary {
   summary: { addedCount: number; needsDomainConfirmationCount: number; skippedDuplicateCount: number };
@@ -14,20 +16,70 @@ interface AddFirmSummary {
   skippedDuplicates: string[];
 }
 
+interface CriteriaResult {
+  firmsFound: number;
+  firmsAdded: number;
+  firmsSkippedDuplicate: number;
+  addedFirms: { id: string; name: string }[];
+}
+
+type Mode = "by_name" | "by_criteria";
+
 export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
+  const [mode, setMode] = useState<Mode>("by_name");
+
+  // By Name
   const [names, setNames] = useState("");
+  const [nameResult, setNameResult] = useState<AddFirmSummary | null>(null);
+
+  // By Criteria
+  const [strategies, setStrategies] = useState<Record<string, string[]>>({});
+  const [focusAreas, setFocusAreas] = useState<Record<string, string[]>>({});
+  const [market, setMarket] = useState("");
+  const [aumMin, setAumMin] = useState("");
+  const [aumMax, setAumMax] = useState("");
+  const [criteriaResult, setCriteriaResult] = useState<CriteriaResult | null>(null);
+
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<AddFirmSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function submit() {
+  const hasCriteria = Object.keys(strategies).length > 0 || Object.keys(focusAreas).length > 0 || market.trim().length > 0 || aumMin || aumMax;
+
+  async function submitByName() {
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/firms", { method: "POST", body: JSON.stringify({ names }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add firms");
-      setResult(data);
+      setNameResult(data);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitByCriteria() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/populate", {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "by_criteria",
+          criteria: {
+            strategies,
+            focusAreas,
+            geography: market || null,
+            aumBand: aumMin || aumMax ? { min: Number(aumMin) || undefined, max: Number(aumMax) || undefined } : null,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Search failed");
+      setCriteriaResult(data);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
@@ -37,59 +89,134 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
   }
 
   function close() {
+    setMode("by_name");
     setNames("");
-    setResult(null);
+    setStrategies({});
+    setFocusAreas({});
+    setMarket("");
+    setAumMin("");
+    setAumMax("");
+    setNameResult(null);
+    setCriteriaResult(null);
     setError(null);
     onOpenChange(false);
   }
 
+  const showingResult = nameResult || criteriaResult;
+
   return (
-    <Modal open={open} onOpenChange={close} title="Add Firm" description="Type one or more firm names — the platform researches everything else." widthClassName="max-w-xl">
-      {!result ? (
+    <Modal
+      open={open}
+      onOpenChange={close}
+      title="Add Firm"
+      description={
+        mode === "by_name"
+          ? "Type one or more firm names — the platform researches everything else."
+          : "Describe the kind of manager you're looking for — the platform searches for and adds matches."
+      }
+      widthClassName="max-w-xl"
+    >
+      {!showingResult ? (
         <div className="space-y-4">
-          <Textarea
-            rows={6}
-            placeholder={"Toorak Capital Partners\nBridge Investment Group\n..."}
-            value={names}
-            onChange={(e) => setNames(e.target.value)}
-          />
-          <p className="text-xs text-text-secondary">
-            One name per line, or comma-separated for a batch. The platform resolves the domain, researches AUM, runs the
-            Classification Engine, and finds contacts + emails automatically.
-          </p>
+          <div className="flex gap-1 rounded-md border border-border bg-page p-1 text-xs font-medium">
+            <button
+              onClick={() => setMode("by_name")}
+              className={`flex-1 rounded px-2 py-1.5 ${mode === "by_name" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
+            >
+              By Name
+            </button>
+            <button
+              onClick={() => setMode("by_criteria")}
+              className={`flex-1 rounded px-2 py-1.5 ${mode === "by_criteria" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
+            >
+              By Strategy & Focus Area
+            </button>
+          </div>
+
+          {mode === "by_name" ? (
+            <>
+              <Textarea
+                rows={6}
+                placeholder={"Toorak Capital Partners\nBridge Investment Group\n..."}
+                value={names}
+                onChange={(e) => setNames(e.target.value)}
+              />
+              <p className="text-xs text-text-secondary">
+                One name per line, or comma-separated for a batch. The platform resolves the domain, researches AUM, runs
+                the Classification Engine, and finds contacts + emails automatically.
+              </p>
+            </>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <Label>Strategies</Label>
+                <TaxonomyPicker taxonomy={STRATEGIES_TAXONOMY} selection={strategies} onChange={setStrategies} />
+              </div>
+              <div>
+                <Label>Focus Areas</Label>
+                <TaxonomyPicker taxonomy={FOCUS_AREAS_TAXONOMY} selection={focusAreas} onChange={setFocusAreas} />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <Label>Market</Label>
+                  <Input value={market} onChange={(e) => setMarket(e.target.value)} placeholder="Southeast US" />
+                </div>
+                <div>
+                  <Label>AUM min (USD)</Label>
+                  <Input value={aumMin} onChange={(e) => setAumMin(e.target.value)} placeholder="1000000000" />
+                </div>
+                <div>
+                  <Label>AUM max (USD)</Label>
+                  <Input value={aumMax} onChange={(e) => setAumMax(e.target.value)} placeholder="15000000000" />
+                </div>
+              </div>
+              <p className="text-xs text-text-secondary">
+                The platform searches for managers matching this brief, skips anything already in the database, and runs
+                the full research pipeline (classification, AUM, contacts, email) on every new match.
+              </p>
+            </div>
+          )}
+
           {error && <p className="text-xs text-status-red">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={close}>
               Cancel
             </Button>
-            <Button onClick={submit} disabled={loading || names.trim().length === 0}>
-              {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {loading ? "Researching…" : "Add & Research"}
-            </Button>
+            {mode === "by_name" ? (
+              <Button onClick={submitByName} disabled={loading || names.trim().length === 0}>
+                {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {loading ? "Researching…" : "Add & Research"}
+              </Button>
+            ) : (
+              <Button onClick={submitByCriteria} disabled={loading || !hasCriteria}>
+                {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {loading ? "Searching…" : "Search & Add"}
+              </Button>
+            )}
           </div>
         </div>
-      ) : (
+      ) : nameResult ? (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <Pill color="green">{result.summary.addedCount} added and fully researched</Pill>
-            <Pill color="amber">{result.summary.needsDomainConfirmationCount} need domain confirmation</Pill>
-            <Pill color="gray">{result.summary.skippedDuplicateCount} skipped as existing duplicates</Pill>
+            <Pill color="green">{nameResult.summary.addedCount} added and fully researched</Pill>
+            <Pill color="amber">{nameResult.summary.needsDomainConfirmationCount} need domain confirmation</Pill>
+            <Pill color="gray">{nameResult.summary.skippedDuplicateCount} skipped as existing duplicates</Pill>
           </div>
-          {result.needsDomainConfirmation.length > 0 && (
+          {nameResult.needsDomainConfirmation.length > 0 && (
             <div>
               <p className="mb-1 text-xs font-medium text-text-secondary">Needs domain confirmation:</p>
               <ul className="text-xs text-text-primary">
-                {result.needsDomainConfirmation.map((f) => (
+                {nameResult.needsDomainConfirmation.map((f) => (
                   <li key={f.id}>{f.name}</li>
                 ))}
               </ul>
             </div>
           )}
-          {result.skippedDuplicates.length > 0 && (
+          {nameResult.skippedDuplicates.length > 0 && (
             <div>
               <p className="mb-1 text-xs font-medium text-text-secondary">Skipped duplicates:</p>
               <ul className="text-xs text-text-primary">
-                {result.skippedDuplicates.map((s, i) => (
+                {nameResult.skippedDuplicates.map((s, i) => (
                   <li key={i}>{s}</li>
                 ))}
               </ul>
@@ -99,6 +226,28 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
             <Button onClick={close}>Done</Button>
           </div>
         </div>
+      ) : (
+        criteriaResult && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <Pill color="blue">{criteriaResult.firmsFound} candidates found</Pill>
+              <Pill color="green">{criteriaResult.firmsAdded} new firms added</Pill>
+              <Pill color="gray">{criteriaResult.firmsSkippedDuplicate} skipped as duplicates</Pill>
+            </div>
+            {criteriaResult.addedFirms.length > 0 && (
+              <ul className="max-h-48 overflow-y-auto text-sm text-text-primary">
+                {criteriaResult.addedFirms.map((f) => (
+                  <li key={f.id} className="border-b border-border py-1.5 last:border-0">
+                    {f.name}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex justify-end">
+              <Button onClick={close}>Done</Button>
+            </div>
+          </div>
+        )
       )}
     </Modal>
   );
