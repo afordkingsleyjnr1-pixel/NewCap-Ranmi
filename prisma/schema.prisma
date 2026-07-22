@@ -231,7 +231,6 @@ model Firm {
   contacts        Contact[]
   crmStage        CrmStageRow?
   activityLog     ActivityLog[]
-  researchSources ResearchSource[]
   emailThreads    EmailThread[]
   meetings        Meeting[]
   tasks           Task[]
@@ -297,6 +296,9 @@ model ActivityLog {
   @@map("activity_log")
 }
 
+// entity_id is polymorphic — it references either firms.id (entity_type
+// "firm") or contacts.id (entity_type "contact") depending on entity_type,
+// so it deliberately carries no foreign key constraint of its own.
 model ResearchSource {
   id                     String   @id @default(uuid())
   entityType             String   @map("entity_type") // "firm" | "contact"
@@ -304,8 +306,6 @@ model ResearchSource {
   fieldName              String   @map("field_name")
   sourceUrlOrDescription String   @map("source_url_or_description") @db.Text
   retrievedAt            DateTime @default(now()) @map("retrieved_at")
-
-  firm Firm? @relation(fields: [entityId], references: [id], map: "research_sources_firm_fkey")
 
   @@map("research_sources")
   @@index([entityType, entityId])

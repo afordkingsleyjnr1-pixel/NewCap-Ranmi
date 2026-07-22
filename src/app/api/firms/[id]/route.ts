@@ -18,7 +18,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         include: { contact: true, createdBy: { select: { id: true, name: true } } },
       },
       tasks: { orderBy: { createdAt: "asc" } },
-      researchSources: true,
       meetings: { orderBy: { startTime: "desc" } },
       emailThreads: { include: { messages: true, contact: true }, orderBy: { lastActivityAt: "desc" } },
     },
@@ -30,7 +29,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     ? await prisma.firm.findMany({ where: { id: { in: firm.similarTo } }, select: { id: true, name: true, deletedAt: true } })
     : [];
 
-  return NextResponse.json({ firm, similarFirms });
+  // research_sources is polymorphic (entity_type + entity_id, no real FK — see
+  // schema comment), so it's fetched separately for the firm plus every one
+  // of its contacts rather than via a Prisma relation.
+  const contactIds = firm.contacts.map((c) => c.id);
+  const researchSources = await prisma.researchSource.findMany({
+    where: {
+      OR: [
+        { entityType: "firm", entityId: firm.id },
+        ...(contactIds.length ? [{ entityType: "contact", entityId: { in: contactIds } }] : []),
+      ],
+    },
+  });
+
+  return NextResponse.json({ firm: { ...firm, researchSources }, similarFirms });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
