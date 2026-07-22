@@ -14,6 +14,8 @@ interface AddFirmSummary {
   added: { id: string; name: string }[];
   needsDomainConfirmation: { id: string; name: string }[];
   skippedDuplicates: string[];
+  researchWarnings?: string[];
+  failed?: string[];
 }
 
 interface CriteriaResult {
@@ -21,6 +23,7 @@ interface CriteriaResult {
   firmsAdded: number;
   firmsSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
+  researchWarnings?: string[];
 }
 
 type Mode = "by_name" | "by_criteria";
@@ -222,6 +225,26 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
               </ul>
             </div>
           )}
+          {!!nameResult.failed?.length && (
+            <div className="rounded-md bg-status-red-bg p-2.5">
+              <p className="mb-1 text-xs font-medium text-status-red">Failed to add:</p>
+              <ul className="text-xs text-status-red">
+                {nameResult.failed.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {!!nameResult.researchWarnings?.length && (
+            <div className="rounded-md bg-status-amber-bg p-2.5">
+              <p className="mb-1 text-xs font-medium text-status-amber">Added, but research was incomplete:</p>
+              <ul className="text-xs text-status-amber">
+                {nameResult.researchWarnings.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="flex justify-end">
             <Button onClick={close}>Done</Button>
           </div>
@@ -242,6 +265,16 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                   </li>
                 ))}
               </ul>
+            )}
+            {!!criteriaResult.researchWarnings?.length && (
+              <div className="rounded-md bg-status-amber-bg p-2.5">
+                <p className="mb-1 text-xs font-medium text-status-amber">Some issues came up during research:</p>
+                <ul className="text-xs text-status-amber">
+                  {criteriaResult.researchWarnings.map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ul>
+              </div>
             )}
             <div className="flex justify-end">
               <Button onClick={close}>Done</Button>
