@@ -1,17 +1,20 @@
 "use client";
 
 import { DndContext, DragEndEvent, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from "@dnd-kit/core";
-import { CRM_STAGES, STAGE_LABELS, STAGE_COLORS, STAGE_ACTIONS, ACTION_LABELS } from "@/lib/crm-stages";
+import { CRM_STAGES, STAGE_LABELS, STAGE_COLORS, nextStepForFirm, type StageAction } from "@/lib/crm-stages";
 import { Pill } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FirmListItem } from "@/lib/types";
 
-function KanbanCard({ firm, onOpen, onAction }: { firm: FirmListItem; onOpen: () => void; onAction: (action: string) => void }) {
+type ActionHandler = (firmId: string, action: NonNullable<StageAction>, meetingId?: string, firmName?: string) => void;
+
+function KanbanCard({ firm, onOpen, onAction }: { firm: FirmListItem; onOpen: () => void; onAction: ActionHandler }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: firm.id });
   const stage = firm.crmStage?.stage;
-  const action = stage ? STAGE_ACTIONS[stage] : null;
   const isDoNotContact = stage === "do_not_contact";
+  const { label, action } = stage ? nextStepForFirm(stage, firm.tasks, firm.meetings) : { label: "—", action: null };
+  const meetingId = firm.meetings.find((m) => m.status === "scheduled")?.id;
 
   return (
     <div
@@ -33,24 +36,26 @@ function KanbanCard({ firm, onOpen, onAction }: { firm: FirmListItem; onOpen: ()
           <span className="text-xs text-status-amber">Follow up {new Date(firm.crmStage.nextFollowUpDate).toLocaleDateString()}</span>
         )}
       </div>
-      {action && !isDoNotContact && (
+      {action && !isDoNotContact ? (
         <Button
           size="sm"
           variant="outline"
           className="mt-2 w-full"
           onClick={(e) => {
             e.stopPropagation();
-            onAction(action);
+            onAction(firm.id, action, meetingId, firm.name);
           }}
         >
-          {ACTION_LABELS[action]}
+          {label}
         </Button>
+      ) : (
+        !isDoNotContact && <p className="mt-2 text-center text-xs text-text-secondary">{label}</p>
       )}
     </div>
   );
 }
 
-function KanbanColumn({ stage, firms, onOpen, onAction }: { stage: (typeof CRM_STAGES)[number]; firms: FirmListItem[]; onOpen: (id: string) => void; onAction: (id: string, action: string) => void }) {
+function KanbanColumn({ stage, firms, onOpen, onAction }: { stage: (typeof CRM_STAGES)[number]; firms: FirmListItem[]; onOpen: (id: string) => void; onAction: ActionHandler }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <div ref={setNodeRef} className={cn("flex w-72 shrink-0 flex-col rounded-lg border border-border bg-page", isOver && "ring-2 ring-accent")}>
@@ -60,7 +65,7 @@ function KanbanColumn({ stage, firms, onOpen, onAction }: { stage: (typeof CRM_S
       </div>
       <div className="flex-1 space-y-2 overflow-y-auto p-2" style={{ maxHeight: "calc(100vh - 260px)" }}>
         {firms.map((f) => (
-          <KanbanCard key={f.id} firm={f} onOpen={() => onOpen(f.id)} onAction={(a) => onAction(f.id, a)} />
+          <KanbanCard key={f.id} firm={f} onOpen={() => onOpen(f.id)} onAction={onAction} />
         ))}
       </div>
     </div>
@@ -75,7 +80,7 @@ export function Kanban({
 }: {
   firms: FirmListItem[];
   onOpen: (id: string) => void;
-  onAction: (id: string, action: string) => void;
+  onAction: ActionHandler;
   onStageChange: (id: string, stage: string) => void;
 }) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));

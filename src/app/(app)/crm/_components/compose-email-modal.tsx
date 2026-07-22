@@ -13,19 +13,27 @@ interface Contact {
   rank: number;
 }
 
+export type ComposeKind = "email" | "follow_up" | "term_sheet";
+
+const KIND_TITLES: Record<ComposeKind, string> = {
+  email: "Send Email",
+  follow_up: "Send Follow-Up",
+  term_sheet: "Send Term Sheet / LOI",
+};
+
 export function ComposeEmailModal({
   open,
   onOpenChange,
   firmId,
   firmName,
-  isFollowUp,
+  kind = "email",
   onSent,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   firmId: string | null;
   firmName?: string;
-  isFollowUp: boolean;
+  kind?: ComposeKind;
   onSent: () => void;
 }) {
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -44,15 +52,19 @@ export function ComposeEmailModal({
         .then((data) => {
           setContacts(data.firm.contacts ?? []);
           if (data.firm.contacts?.[0]) setContactId(data.firm.contacts[0].id);
-          setSubject(isFollowUp ? `Following up — ${data.firm.name}` : `Introduction — ${data.firm.name}`);
-          setMessage(
-            isFollowUp
-              ? `Hi,\n\nFollowing up on my note below — happy to share more detail whenever useful.\n\nBest,`
-              : `Hi,\n\nReaching out from Adcapital Partners / NCM International regarding a potential fit with ${data.firm.name}'s platform.\n\nBest,`
-          );
+          if (kind === "follow_up") {
+            setSubject(`Following up — ${data.firm.name}`);
+            setMessage(`Hi,\n\nFollowing up on my note below — happy to share more detail whenever useful.\n\nBest,`);
+          } else if (kind === "term_sheet") {
+            setSubject(`Term Sheet / LOI — ${data.firm.name}`);
+            setMessage(`Hi,\n\nPlease find attached our term sheet / letter of intent for your review.\n\nBest,`);
+          } else {
+            setSubject(`Introduction — ${data.firm.name}`);
+            setMessage(`Hi,\n\nReaching out from Adcapital Partners / NCM International regarding a potential fit with ${data.firm.name}'s platform.\n\nBest,`);
+          }
         });
     }
-  }, [open, firmId, isFollowUp]);
+  }, [open, firmId, kind]);
 
   async function submit() {
     setLoading(true);
@@ -67,7 +79,7 @@ export function ComposeEmailModal({
           adHocEmail: contactId ? undefined : adHocEmail,
           subject,
           message,
-          isFollowUp,
+          kind,
         }),
       });
       const data = await res.json();
@@ -82,7 +94,7 @@ export function ComposeEmailModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title={isFollowUp ? "Send Follow-Up" : "Send Email"} description={firmName} widthClassName="max-w-lg">
+    <Modal open={open} onOpenChange={onOpenChange} title={KIND_TITLES[kind]} description={firmName} widthClassName="max-w-lg">
       <div className="space-y-3">
         <div>
           <Label>Recipient</Label>
@@ -116,7 +128,7 @@ export function ComposeEmailModal({
           </Button>
           <Button onClick={submit} disabled={loading}>
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-            {isFollowUp ? "Send Follow-Up" : "Send Email"}
+            {KIND_TITLES[kind]}
           </Button>
         </div>
       </div>

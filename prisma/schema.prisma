@@ -59,18 +59,17 @@ enum EmailStatus {
 
 enum CrmStage {
   not_contacted
-  researched_ready_for_outreach
-  outreach_sent
+  email_sent
   follow_up_due
+  follow_up_sent
   no_response
-  responded_interested
-  responded_not_interested
+  responded
   meeting_scheduled
   in_discussion_diligence
-  term_sheet_loi
+  term_sheet_sent
   closed_won
   closed_lost
-  on_hold_nurture
+  nurture
   do_not_contact
 }
 
@@ -139,6 +138,7 @@ enum NotificationType {
   firms_reassigned
   email_needs_reauth
   meeting_reminder
+  follow_up_due
 }
 
 // ────────────────────────────────────────────────────────────────────────

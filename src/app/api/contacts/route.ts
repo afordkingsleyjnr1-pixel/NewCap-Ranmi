@@ -27,7 +27,15 @@ export async function GET(req: NextRequest) {
 
   const contacts = await prisma.contact.findMany({
     where,
-    include: { firm: { include: { crmStage: true } } },
+    include: {
+      firm: {
+        include: {
+          crmStage: true,
+          tasks: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
+          meetings: { where: { status: "scheduled" }, orderBy: { startTime: "desc" }, take: 1 },
+        },
+      },
+    },
     orderBy: { name: "asc" },
     take: 1000,
   });

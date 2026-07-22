@@ -7,10 +7,11 @@ import { Pill, TagPill } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Label, Select, Textarea } from "@/components/ui/input";
-import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
+import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES, nextStepForFirm } from "@/lib/crm-stages";
 import { formatDate, formatDateTime, cn } from "@/lib/utils";
 import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink } from "lucide-react";
 import { PopulateModal } from "./populate-modal";
+import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 
 interface Props {
   firmId: string | null;
@@ -37,8 +38,16 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
     load();
   }, [load]);
 
+  const { handleAction, modals: nextStepModals } = useNextStepActions(() => {
+    load();
+    onChanged();
+  });
+
   if (!firmId) return null;
   const firm = data?.firm;
+  const openTasks = firm?.tasks?.filter((t: any) => t.status === "open") ?? [];
+  const nextStep = firm?.crmStage ? nextStepForFirm(firm.crmStage.stage, openTasks, firm.meetings ?? []) : null;
+  const scheduledMeetingId = firm?.meetings?.find((m: any) => m.status === "scheduled")?.id;
 
   async function reclassify() {
     setBusy("reclassify");
@@ -114,6 +123,20 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                 </Button>
               </div>
             </div>
+
+            {nextStep && (
+              <div className="flex items-center justify-between rounded-md bg-page px-3 py-2.5">
+                <div>
+                  <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">Next Step</span>
+                  <p className="text-sm font-medium text-text-primary">{nextStep.label}</p>
+                </div>
+                {nextStep.action && (
+                  <Button size="sm" onClick={() => handleAction(firm.id, nextStep.action!, scheduledMeetingId, firm.name)}>
+                    {nextStep.label}
+                  </Button>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -290,6 +313,7 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
           seedFirmName={firm.name}
         />
       )}
+      {nextStepModals}
     </>
   );
 }
