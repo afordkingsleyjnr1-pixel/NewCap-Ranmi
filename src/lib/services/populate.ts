@@ -50,6 +50,7 @@ export interface PopulateResult {
   firmsAdded: number;
   firmsSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
+  researchWarnings: string[];
 }
 
 export async function runPopulate(params: {
@@ -88,7 +89,7 @@ export async function runPopulate(params: {
     briefs = [params.criteria!];
   } else {
     const allFirms = await prisma.firm.findMany({ where: { deletedAt: null } });
-    briefs = allFirms.map((f: any) => ({
+    briefs = allFirms.map((f) => ({
       strategies: f.strategies as Record<string, string[]>,
       focusAreas: f.focusAreas as Record<string, string[]>,
       geography: f.hqLocation,
@@ -99,13 +100,19 @@ export async function runPopulate(params: {
 
   const allCandidateNames = new Set<string>();
   for (const brief of briefs) {
-    const names = await searchCandidates(brief);
-    names.forEach((n) => allCandidateNames.add(n));
+    try {
+      const names = await searchCandidates(brief);
+      names.forEach((n) => allCandidateNames.add(n));
+    } catch {
+      // One brief's search failing (e.g. transient API error in database_wide
+      // mode with many firms) shouldn't abort the whole run — keep going.
+    }
   }
 
   let firmsAdded = 0;
   let firmsSkippedDuplicate = 0;
   const addedFirms: { id: string; name: string }[] = [];
+  const researchWarnings: string[] = [];
 
   for (const name of allCandidateNames) {
     const dup = await findDuplicate({ name });
@@ -113,14 +120,19 @@ export async function runPopulate(params: {
       firmsSkippedDuplicate++;
       continue;
     }
-    const outcome = await runFirmResearchPipeline({
-      name,
-      sourceType: "comparable",
-      populateRunId: run.id,
-      similarToFirmId: params.mode === "similar_to_firm" ? params.seedFirmId : null,
-    });
-    firmsAdded++;
-    addedFirms.push({ id: outcome.firmId, name: outcome.name });
+    try {
+      const outcome = await runFirmResearchPipeline({
+        name,
+        sourceType: "comparable",
+        populateRunId: run.id,
+        similarToFirmId: params.mode === "similar_to_firm" ? params.seedFirmId : null,
+      });
+      firmsAdded++;
+      addedFirms.push({ id: outcome.firmId, name: outcome.name });
+      if (outcome.researchWarning) researchWarnings.push(`${name}: ${outcome.researchWarning}`);
+    } catch (e) {
+      researchWarnings.push(`${name}: failed to add (${e instanceof Error ? e.message : "unknown error"})`);
+    }
   }
 
   await prisma.populateRun.update({
@@ -128,5 +140,5 @@ export async function runPopulate(params: {
     data: { firmsFound: allCandidateNames.size, firmsAdded, firmsSkippedDuplicate },
   });
 
-  return { runId: run.id, firmsFound: allCandidateNames.size, firmsAdded, firmsSkippedDuplicate, addedFirms };
+  return { runId: run.id, firmsFound: allCandidateNames.size, firmsAdded, firmsSkippedDuplicate, addedFirms, researchWarnings };
 }
