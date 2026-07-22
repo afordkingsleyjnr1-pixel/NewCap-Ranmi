@@ -6,6 +6,7 @@ import { discoverContacts } from "./contact-discovery";
 import { findEmail, isHunterConfigured } from "./hunter";
 import { isAnthropicConfigured } from "@/lib/anthropic";
 import { getMandateSettings, deriveWithinMandate } from "./mandate";
+import { createPendingTask } from "./pipeline-tasks";
 import type { SourceType } from "@/generated/prisma";
 
 export interface PipelineOutcome {
@@ -55,6 +56,7 @@ export async function runFirmResearchPipeline(params: {
         crmStage: { create: { stage: "not_contacted" } },
       },
     });
+    await createPendingTask(firm.id, firm.name, "send_email");
     return {
       firmId: firm.id,
       name: firm.name,
@@ -133,6 +135,8 @@ export async function runFirmResearchPipeline(params: {
       crmStage: { create: { stage: "not_contacted" } },
     },
   });
+
+  await createPendingTask(firm.id, firm.name, "send_email");
 
   if (aum.sourceDescription) {
     await prisma.researchSource.create({

@@ -6,12 +6,14 @@ import { Input, Select } from "@/components/ui/input";
 import { Pill, TagPill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar } from "@/components/ui/avatar";
-import { Plus, Search, X, Sparkles } from "lucide-react";
+import { Plus, Search, X, Sparkles, Bell } from "lucide-react";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
 import { AddFirmModal } from "./_components/add-firm-modal";
 import { PopulateModal } from "./_components/populate-modal";
 import { FirmDrawer } from "./_components/firm-drawer";
+import { NextStepCell } from "../crm/_components/next-step-cell";
+import { useNextStepActions } from "../crm/_components/use-next-step-actions";
 import type { FirmListItem } from "@/lib/types";
 import { useSearchParams } from "next/navigation";
 
@@ -85,6 +87,8 @@ export default function FirmsPage() {
     setSelected(new Set());
     load();
   }
+
+  const { handleAction, modals } = useNextStepActions(load);
 
   const populateCriteria = useMemo(() => {
     const strategies = strategyParent ? { [strategyParent]: [] } : {};
@@ -197,6 +201,9 @@ export default function FirmsPage() {
               <th>AUM</th>
               <th>Mandate</th>
               <th>CRM Stage</th>
+              <th>Next Step</th>
+              <th>Pending Task</th>
+              <th className="w-8"></th>
               <th>Owner</th>
               <th>Primary Contact</th>
               <th>Email</th>
@@ -205,14 +212,14 @@ export default function FirmsPage() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={11} className="py-8 text-center text-text-secondary">
+                <td colSpan={14} className="py-8 text-center text-text-secondary">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && firms.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-8 text-center text-text-secondary">
+                <td colSpan={14} className="py-8 text-center text-text-secondary">
                   No firms yet. Click Add Firm to get started.
                 </td>
               </tr>
@@ -246,6 +253,20 @@ export default function FirmsPage() {
                   </td>
                   <td>
                     {firm.crmStage && <Pill color={STAGE_COLORS[firm.crmStage.stage]}>{STAGE_LABELS[firm.crmStage.stage]}</Pill>}
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <NextStepCell firm={firm} onAction={handleAction} />
+                  </td>
+                  <td className="text-text-secondary">
+                    {firm.tasks[0] ? firm.tasks[0].title.split(" — ")[0] : "—"}
+                  </td>
+                  <td>
+                    {firm.unreadNotifications > 0 && (
+                      <span className="flex items-center gap-1 text-status-red" title={`${firm.unreadNotifications} unread notification(s)`}>
+                        <Bell className="h-3.5 w-3.5" />
+                        <span className="text-xs font-medium">{firm.unreadNotifications}</span>
+                      </span>
+                    )}
                   </td>
                   <td>
                     {firm.crmStage?.owner ? (
@@ -287,6 +308,7 @@ export default function FirmsPage() {
         initialFocusAreas={populateCriteria.focusAreas}
       />
       <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      {modals}
     </div>
   );
 }

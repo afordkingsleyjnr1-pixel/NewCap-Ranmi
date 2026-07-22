@@ -23,7 +23,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   await prisma.crmStageRow.update({
     where: { firmId },
-    data: { stage: stage as never, stageChangedAt: new Date() },
+    data: {
+      stage: stage as never,
+      stageChangedAt: new Date(),
+      ...(typeof body.dealNotes === "string" ? { dealNotes: body.dealNotes } : {}),
+    },
   });
 
   await prisma.activityLog.create({
@@ -36,9 +40,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   });
 
   // Section 5.9 — Term Sheet / LOI entry auto-generates the closing checklist.
-  if (stage === "term_sheet_loi" && before.stage !== "term_sheet_loi") {
-    const existingTemplateTasks = await prisma.task.count({ where: { firmId, isFromTemplate: true } });
-    if (existingTemplateTasks === 0) {
+  if (stage === "term_sheet_sent" && before.stage !== "term_sheet_sent") {
+    const existingChecklistTasks = await prisma.task.count({ where: { firmId, title: { in: CLOSING_CHECKLIST_TEMPLATE } } });
+    if (existingChecklistTasks === 0) {
       await prisma.task.createMany({
         data: CLOSING_CHECKLIST_TEMPLATE.map((title) => ({ firmId, title, isFromTemplate: true, status: "open" as const })),
       });

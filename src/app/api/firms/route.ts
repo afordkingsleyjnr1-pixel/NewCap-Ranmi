@@ -46,12 +46,24 @@ export async function GET(req: NextRequest) {
     include: {
       crmStage: { include: { owner: { select: { id: true, name: true } } } },
       contacts: { where: { removedAt: null }, orderBy: { rank: "asc" }, take: 1 },
+      tasks: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
+      meetings: { where: { status: "scheduled" }, orderBy: { startTime: "desc" }, take: 1 },
     },
     orderBy: { createdAt: "desc" },
     take: 500,
   });
 
-  return NextResponse.json({ firms });
+  // Relevant Notifications — unread count per firm, for the grid's alert indicator.
+  const unreadCounts = await prisma.notification.groupBy({
+    by: ["relatedFirmId"],
+    where: { userId: user.id, isRead: false, relatedFirmId: { in: firms.map((f) => f.id) } },
+    _count: { _all: true },
+  });
+  const unreadByFirm = new Map(unreadCounts.map((c) => [c.relatedFirmId, c._count._all]));
+
+  const firmsWithAlerts = firms.map((f) => ({ ...f, unreadNotifications: unreadByFirm.get(f.id) ?? 0 }));
+
+  return NextResponse.json({ firms: firmsWithAlerts });
 }
 
 export async function POST(req: NextRequest) {

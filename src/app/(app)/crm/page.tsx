@@ -1,22 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Kanban } from "./_components/kanban";
-import { ComposeEmailModal } from "./_components/compose-email-modal";
-import { ScheduleMeetingModal } from "./_components/schedule-meeting-modal";
+import { NextStepCell } from "./_components/next-step-cell";
+import { useNextStepActions } from "./_components/use-next-step-actions";
 import { FirmDrawer } from "../firms/_components/firm-drawer";
 import { KanbanSquare, List } from "lucide-react";
 import { Pill } from "@/components/ui/badge";
-import { STAGE_LABELS, STAGE_COLORS, STAGE_ACTIONS, ACTION_LABELS } from "@/lib/crm-stages";
+import { STAGE_LABELS, STAGE_COLORS } from "@/lib/crm-stages";
 import type { FirmListItem } from "@/lib/types";
 
 export default function CrmPage() {
   const [firms, setFirms] = useState<FirmListItem[]>([]);
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [openFirmId, setOpenFirmId] = useState<string | null>(null);
-  const [composeFirm, setComposeFirm] = useState<{ id: string; name: string; isFollowUp: boolean } | null>(null);
-  const [meetingFirm, setMeetingFirm] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch("/api/firms");
@@ -28,17 +25,11 @@ export default function CrmPage() {
     load();
   }, [load]);
 
+  const { handleAction, modals } = useNextStepActions(load);
+
   async function handleStageChange(firmId: string, stage: string) {
     await fetch(`/api/crm/${firmId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
     load();
-  }
-
-  function handleAction(firmId: string, action: string) {
-    const firm = firms.find((f) => f.id === firmId);
-    if (!firm) return;
-    if (action === "send_email") setComposeFirm({ id: firmId, name: firm.name, isFollowUp: false });
-    if (action === "send_follow_up") setComposeFirm({ id: firmId, name: firm.name, isFollowUp: true });
-    if (action === "schedule_meeting") setMeetingFirm({ id: firmId, name: firm.name });
   }
 
   return (
@@ -72,10 +63,10 @@ export default function CrmPage() {
             <thead>
               <tr>
                 <th>Firm</th>
-                <th>Stage</th>
-                <th>Next Follow-Up</th>
+                <th>Current Stage</th>
+                <th>Next Step</th>
+                <th>Pending Task</th>
                 <th>Owner</th>
-                <th>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -87,22 +78,15 @@ export default function CrmPage() {
                 })
                 .map((f) => {
                   const stage = f.crmStage?.stage;
-                  const action = stage ? STAGE_ACTIONS[stage] : null;
                   return (
                     <tr key={f.id} onClick={() => setOpenFirmId(f.id)}>
                       <td className="font-medium text-text-primary">{f.name}</td>
                       <td>{stage && <Pill color={STAGE_COLORS[stage]}>{STAGE_LABELS[stage]}</Pill>}</td>
-                      <td className="text-text-secondary">
-                        {f.crmStage?.nextFollowUpDate ? new Date(f.crmStage.nextFollowUpDate).toLocaleDateString() : "—"}
-                      </td>
-                      <td className="text-text-secondary">{f.crmStage?.owner?.name ?? "Unassigned"}</td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        {action && (
-                          <Button size="sm" variant="outline" onClick={() => handleAction(f.id, action)}>
-                            {ACTION_LABELS[action]}
-                          </Button>
-                        )}
+                        <NextStepCell firm={f} onAction={handleAction} />
                       </td>
+                      <td className="text-text-secondary">{f.tasks[0] ? f.tasks[0].title.split(" — ")[0] : "—"}</td>
+                      <td className="text-text-secondary">{f.crmStage?.owner?.name ?? "Unassigned"}</td>
                     </tr>
                   );
                 })}
@@ -111,22 +95,8 @@ export default function CrmPage() {
         </div>
       )}
 
-      <ComposeEmailModal
-        open={!!composeFirm}
-        onOpenChange={(o) => !o && setComposeFirm(null)}
-        firmId={composeFirm?.id ?? null}
-        firmName={composeFirm?.name}
-        isFollowUp={!!composeFirm?.isFollowUp}
-        onSent={load}
-      />
-      <ScheduleMeetingModal
-        open={!!meetingFirm}
-        onOpenChange={(o) => !o && setMeetingFirm(null)}
-        firmId={meetingFirm?.id ?? null}
-        firmName={meetingFirm?.name}
-        onScheduled={load}
-      />
       <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      {modals}
     </div>
   );
 }

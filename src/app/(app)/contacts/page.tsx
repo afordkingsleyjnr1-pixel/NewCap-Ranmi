@@ -4,16 +4,23 @@ import { useEffect, useState, useCallback } from "react";
 import { Input, Select } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Search } from "lucide-react";
-import { STAGE_LABELS, STAGE_COLORS, STAGE_ACTIONS, ACTION_LABELS } from "@/lib/crm-stages";
-import { Button } from "@/components/ui/button";
+import { STAGE_LABELS, STAGE_COLORS, type CrmStageKey } from "@/lib/crm-stages";
 import { FirmDrawer } from "../firms/_components/firm-drawer";
+import { NextStepCell } from "../crm/_components/next-step-cell";
+import { useNextStepActions } from "../crm/_components/use-next-step-actions";
 
 interface ContactRow {
   id: string;
   name: string;
   email: string | null;
   emailStatus: string;
-  firm: { id: string; name: string; crmStage: { stage: keyof typeof STAGE_LABELS } | null };
+  firm: {
+    id: string;
+    name: string;
+    crmStage: { stage: CrmStageKey } | null;
+    tasks: Array<{ title: string }>;
+    meetings: Array<{ id: string; endTime: string; status: string }>;
+  };
 }
 
 export default function ContactsPage() {
@@ -37,6 +44,8 @@ export default function ContactsPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const { handleAction, modals } = useNextStepActions(load);
 
   return (
     <div className="space-y-4">
@@ -65,8 +74,8 @@ export default function ContactsPage() {
               <th>Name</th>
               <th>Email</th>
               <th>Firm</th>
-              <th>Firm CRM Stage</th>
-              <th>Action</th>
+              <th>Current Stage</th>
+              <th>Next Step</th>
             </tr>
           </thead>
           <tbody>
@@ -86,7 +95,6 @@ export default function ContactsPage() {
             )}
             {contacts.map((c) => {
               const stage = c.firm.crmStage?.stage;
-              const action = stage ? STAGE_ACTIONS[stage] : null;
               return (
                 <tr key={c.id} onClick={() => setOpenFirmId(c.firm.id)}>
                   <td className="font-medium text-text-primary">{c.name}</td>
@@ -103,11 +111,7 @@ export default function ContactsPage() {
                   <td className="text-accent">{c.firm.name}</td>
                   <td>{stage && <Pill color={STAGE_COLORS[stage]}>{STAGE_LABELS[stage]}</Pill>}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    {action && (
-                      <Button size="sm" variant="outline">
-                        {ACTION_LABELS[action]}
-                      </Button>
-                    )}
+                    <NextStepCell firm={c.firm} onAction={handleAction} />
                   </td>
                 </tr>
               );
@@ -117,6 +121,7 @@ export default function ContactsPage() {
       </div>
 
       <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      {modals}
     </div>
   );
 }

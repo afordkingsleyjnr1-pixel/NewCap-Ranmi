@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAppSettings } from "@/lib/services/app-settings";
+import { createPendingTask } from "@/lib/services/pipeline-tasks";
+import { createNotification } from "@/lib/services/notifications";
 
-// Section 5.6/5.7 step 9 — daily job: Outreach Sent -> Follow-Up Due (after threshold,
-// no reply) and, once a follow-up was actually sent and the threshold passes again,
-// Follow-Up Due -> No Response. Intended to run once/day via an external scheduler
-// (e.g. Vercel Cron hitting this route) — see vercel.json.
+// Daily job: Email Sent -> Follow-Up Due (no reply within threshold), and
+// Follow-Up Sent -> No Response (follow-up itself got no reply either).
+// Entering Follow-Up Due creates the "Send Follow-Up" task and a
+// notification — the two required side effects of that transition.
+// Intended to run once/day via an external scheduler (e.g. Vercel Cron
+// hitting this route) — see vercel.json.
 export async function POST(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -19,14 +23,24 @@ export async function POST(req: Request) {
   let movedToFollowUp = 0;
   let movedToNoResponse = 0;
 
-  const outreachSentThreads = await prisma.emailThread.findMany({
+  const emailSentThreads = await prisma.emailThread.findMany({
     where: { status: "awaiting_reply", followUpSentAt: null, lastActivityAt: { lte: cutoff } },
     include: { firm: { include: { crmStage: true } } },
   });
-  for (const t of outreachSentThreads) {
-    if (t.firm.crmStage?.stage === "outreach_sent") {
+  for (const t of emailSentThreads) {
+    if (t.firm.crmStage?.stage === "email_sent") {
       await prisma.crmStageRow.update({ where: { firmId: t.firmId }, data: { stage: "follow_up_due", stageChangedAt: new Date() } });
       await prisma.activityLog.create({ data: { firmId: t.firmId, type: "stage_change", body: "Auto-flagged: Follow-Up Due (no reply within threshold)" } });
+      await createPendingTask(t.firmId, t.firm.name, "send_follow_up");
+      const owner = t.firm.crmStage?.ownerId;
+      if (owner) {
+        await createNotification({
+          userId: owner,
+          type: "follow_up_due",
+          relatedFirmId: t.firmId,
+          body: `Follow-up is due for ${t.firm.name}`,
+        });
+      }
       movedToFollowUp++;
     }
   }
@@ -36,7 +50,7 @@ export async function POST(req: Request) {
     include: { firm: { include: { crmStage: true } } },
   });
   for (const t of followedUpThreads) {
-    if (t.firm.crmStage?.stage === "follow_up_due") {
+    if (t.firm.crmStage?.stage === "follow_up_sent") {
       await prisma.$transaction([
         prisma.emailThread.update({ where: { id: t.id }, data: { status: "no_response" } }),
         prisma.crmStageRow.update({ where: { firmId: t.firmId }, data: { stage: "no_response", stageChangedAt: new Date() } }),

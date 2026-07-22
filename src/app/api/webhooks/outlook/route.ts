@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getAuthenticatedGraphClient } from "@/lib/services/microsoft-oauth";
-import { createNotification } from "@/lib/services/notifications";
+import { handleInboundReply } from "@/lib/services/reply-handling";
 
 // Section 5.7 step 7 — Microsoft Graph mail subscription webhook.
 export async function GET(req: NextRequest) {
@@ -28,12 +28,7 @@ export async function POST(req: NextRequest) {
       const thread = await prisma.emailThread.findFirst({ where: { providerThreadId: conversationId } });
       if (!thread) continue;
 
-      await prisma.emailMessage.create({ data: { threadId: thread.id, direction: "inbound", body: message.body?.content ?? "", isFollowUp: false } });
-      await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date() } });
-      await prisma.activityLog.create({
-        data: { firmId: thread.firmId, contactId: thread.contactId, type: "email_received", body: "Reply received", createdById: null },
-      });
-      await createNotification({ userId: connection.userId, type: "reply_received", relatedFirmId: thread.firmId, body: `New reply on "${thread.subject}"` });
+      await handleInboundReply({ threadId: thread.id, body: message.body?.content ?? "", notifyUserId: connection.userId });
     } catch {
       // non-fatal per-notification
     }

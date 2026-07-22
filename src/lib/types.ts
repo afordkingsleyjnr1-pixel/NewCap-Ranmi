@@ -19,5 +19,8 @@ export interface FirmListItem {
     owner: { id: string; name: string } | null;
   } | null;
   contacts: Array<{ id: string; name: string; email: string | null; emailStatus: string }>;
+  tasks: Array<{ id: string; title: string; dueDate: string | null }>;
+  meetings: Array<{ id: string; startTime: string; endTime: string; status: string }>;
+  unreadNotifications: number;
   deletedAt: string | null;
 }

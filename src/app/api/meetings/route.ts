@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 import { createCalendarEvent } from "@/lib/services/calendar";
+import { completePendingTask } from "@/lib/services/pipeline-tasks";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -41,6 +42,8 @@ export async function POST(req: NextRequest) {
   const attendeeEmail = contactId ? (await prisma.contact.findUniqueOrThrow({ where: { id: contactId } })).email : adHocEmail;
   if (!attendeeEmail) return NextResponse.json({ error: "No attendee email available" }, { status: 400 });
 
+  const firm = await prisma.firm.findUniqueOrThrow({ where: { id: firmId } });
+
   try {
     const event = await createCalendarEvent({
       userId: user!.id,
@@ -71,6 +74,7 @@ export async function POST(req: NextRequest) {
     await prisma.activityLog.create({ data: { firmId, contactId, type: "meeting", body: `Meeting scheduled: "${title}"`, createdById: user!.id } });
     await prisma.crmStageRow.update({ where: { firmId }, data: { stage: "meeting_scheduled", stageChangedAt: new Date() } });
     await prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Stage changed to meeting_scheduled", createdById: user!.id } });
+    await completePendingTask(firmId, firm.name, "schedule_meeting");
 
     return NextResponse.json({ meeting });
   } catch (e) {

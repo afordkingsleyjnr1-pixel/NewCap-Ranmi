@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { google } from "googleapis";
 import { getAuthenticatedGoogleClient } from "@/lib/services/google-oauth";
-import { createNotification } from "@/lib/services/notifications";
+import { handleInboundReply } from "@/lib/services/reply-handling";
 
 // Section 5.7 step 7 — Gmail push notification webhook (via Pub/Sub). Google
 // delivers a base64 Pub/Sub message with {emailAddress, historyId}; we look
@@ -41,17 +41,7 @@ export async function POST(req: NextRequest) {
           "base64"
         ).toString("utf8");
 
-        await prisma.emailMessage.create({ data: { threadId: thread.id, direction: "inbound", body: bodyText, isFollowUp: false } });
-        await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date() } });
-        await prisma.activityLog.create({
-          data: { firmId: thread.firmId, contactId: thread.contactId, type: "email_received", body: "Reply received", createdById: null },
-        });
-        await createNotification({
-          userId: connection.userId,
-          type: "reply_received",
-          relatedFirmId: thread.firmId,
-          body: `New reply on "${thread.subject}"`,
-        });
+        await handleInboundReply({ threadId: thread.id, body: bodyText, notifyUserId: connection.userId });
       }
     }
   } catch {

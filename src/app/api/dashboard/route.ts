@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { firmScopeWhere } from "@/lib/authz";
 
 // Active-deal stages: past initial outreach, not yet closed/dead/nurtured.
-const ACTIVE_DEAL_STAGES = ["responded_interested", "meeting_scheduled", "in_discussion_diligence", "term_sheet_loi"] as const;
+const ACTIVE_DEAL_STAGES = ["responded", "meeting_scheduled", "in_discussion_diligence", "term_sheet_sent"] as const;
 
 export async function GET() {
   const user = await getCurrentUser();
