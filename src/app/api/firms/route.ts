@@ -77,6 +77,8 @@ export async function POST(req: NextRequest) {
   const added: { id: string; name: string }[] = [];
   const needsDomainConfirmation: { id: string; name: string }[] = [];
   const skippedDuplicates: string[] = [];
+  const researchWarnings: string[] = [];
+  const failed: string[] = [];
 
   for (const name of names) {
     const dup = await findDuplicate({ name });
@@ -85,11 +87,20 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const outcome = await runFirmResearchPipeline({ name, sourceType: "manual_add" });
-    if (outcome.domainResolutionStatus === "resolved") {
-      added.push({ id: outcome.firmId, name: outcome.name });
-    } else {
-      needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
+    try {
+      const outcome = await runFirmResearchPipeline({ name, sourceType: "manual_add" });
+      if (outcome.domainResolutionStatus === "resolved") {
+        added.push({ id: outcome.firmId, name: outcome.name });
+      } else {
+        needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
+      }
+      if (outcome.researchWarning) {
+        researchWarnings.push(`${name}: ${outcome.researchWarning}`);
+      }
+    } catch (e) {
+      // A step failing shouldn't take down the whole batch — one bad name
+      // (or a full API outage) still lets the rest of the list get added.
+      failed.push(`${name}: ${e instanceof Error ? e.message : "Unknown error"}`);
     }
   }
 
@@ -102,5 +113,7 @@ export async function POST(req: NextRequest) {
     added,
     needsDomainConfirmation,
     skippedDuplicates,
+    researchWarnings,
+    failed,
   });
 }
