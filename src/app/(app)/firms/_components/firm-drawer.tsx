@@ -9,7 +9,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES, nextStepForFirm } from "@/lib/crm-stages";
 import { formatDate, formatDateTime, cn } from "@/lib/utils";
-import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink } from "lucide-react";
+import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search } from "lucide-react";
 import { PopulateModal } from "./populate-modal";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 
@@ -119,6 +119,21 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
     if (!confirm(`Delete contact ${contactName}? This cannot be undone.`)) return;
     setBusy(`contact-${contactId}`);
     await fetch(`/api/contacts/${contactId}`, { method: "DELETE" });
+    await load();
+    onChanged();
+    setBusy(null);
+  }
+
+  async function findEmailForContact(contactId: string) {
+    setBusy(`email-${contactId}`);
+    setFindContactWarnings([]);
+    const res = await fetch(`/api/contacts/${contactId}/find-email`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFindContactWarnings([data.error ?? "Find Email failed."]);
+    } else if (!data.contact?.email) {
+      setFindContactWarnings(["Hunter.io found no email for this contact."]);
+    }
     await load();
     onChanged();
     setBusy(null);
@@ -332,7 +347,20 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                           {c.name} {c.isPrimaryBdContact && <TagPill className="ml-1">Primary</TagPill>}
                         </p>
                         <p className="text-xs text-text-secondary">{c.title ?? "—"}</p>
-                        <p className="text-xs text-text-secondary">{c.email ?? "no email found"}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs text-text-secondary">{c.email ?? "no email found"}</p>
+                          {!c.email && (
+                            <button
+                              onClick={() => findEmailForContact(c.id)}
+                              disabled={busy === `email-${c.id}` || !firm.domain}
+                              title={!firm.domain ? "Firm has no resolved domain" : "Find email via Hunter.io"}
+                              className="flex items-center gap-1 text-xs text-accent hover:underline disabled:cursor-not-allowed disabled:text-text-secondary disabled:no-underline"
+                            >
+                              {busy === `email-${c.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Search className="h-3 w-3" />}
+                              Find Email
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <Pill color={c.emailStatus === "verified" ? "green" : c.emailStatus === "inferred" ? "amber" : "gray"}>
