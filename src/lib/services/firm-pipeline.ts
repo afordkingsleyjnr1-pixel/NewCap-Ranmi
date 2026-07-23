@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/db";
-import { resolveDomain } from "./domain-resolution";
-import { researchAum } from "./aum-research";
-import { classifyFirm } from "./classification-engine";
+import { researchFirmCore } from "./firm-core-research";
 import { discoverContacts } from "./contact-discovery";
 import { findEmail, isHunterConfigured } from "./hunter";
 import { isAnthropicConfigured } from "@/lib/anthropic";
@@ -27,16 +25,22 @@ function errorMessage(e: unknown): string {
 
 /**
  * The single shared research pipeline behind Add Firm (5.1) and every candidate
- * Populate surfaces (5.10): resolve domain → AUM research → Classification Engine
- * → Contact Discovery → Hunter email enrichment. Writes research_sources rows
- * throughout so every field stays traceable (Section 4.5).
+ * Populate surfaces (5.10): one combined domain+AUM+classification research
+ * call → Contact Discovery → Hunter email enrichment. Writes research_sources
+ * rows throughout so every field stays traceable (Section 4.5).
  *
- * Each AI-dependent step degrades independently — a billing error, rate limit,
- * or transient API failure on one step (e.g. AUM research) never blocks the
- * others or crashes the whole pipeline; the firm is still created with
- * whatever succeeded, flagged needs_review/unresolved where it didn't, and
- * the first failure message is returned as `researchWarning` so it's visible
- * instead of looking like the firm was silently researched with blank data.
+ * Domain/AUM/classification are one Claude call (see firm-core-research.ts)
+ * rather than three, to share a single web_search budget instead of each
+ * step paying for its own — search calls are billed per-use independent of
+ * token cost, so this is the main cost lever. Contact discovery stays a
+ * second, separate call since it's a distinct task.
+ *
+ * Each AI-dependent step still degrades independently — a billing error,
+ * rate limit, or transient API failure never blocks the others or crashes
+ * the whole pipeline; the firm is still created with whatever succeeded,
+ * flagged needs_review/unresolved where it didn't, and the first failure
+ * message is returned as `researchWarning` so it's visible instead of
+ * looking like the firm was silently researched with blank data.
  */
 export async function runFirmResearchPipeline(params: {
   name: string;
@@ -69,64 +73,44 @@ export async function runFirmResearchPipeline(params: {
 
   let researchWarning: string | null = null;
 
-  // 1. Domain resolution
-  let domainResult: Awaited<ReturnType<typeof resolveDomain>> = {
+  // 1-3. Domain resolution + AUM research + Classification, combined into one call.
+  let core: Awaited<ReturnType<typeof researchFirmCore>> = {
     domain: null,
-    status: "unresolved",
+    domainStatus: "unresolved",
     hqLocation: null,
-    reasoning: null,
-  };
-  try {
-    domainResult = await resolveDomain(params.name);
-  } catch (e) {
-    researchWarning = `Domain resolution failed: ${errorMessage(e)}`;
-  }
-
-  // 2. AUM research (runs even without a resolved domain — search can still work off the name)
-  let aum: Awaited<ReturnType<typeof researchAum>> = {
     aumValue: null,
     aumDisplay: "NA",
     aumAsOf: null,
     aumConfidence: "unconfirmed",
-    sourceDescription: null,
-  };
-  try {
-    aum = await researchAum({ firmName: params.name, domain: domainResult.domain });
-  } catch (e) {
-    researchWarning ??= `AUM research failed: ${errorMessage(e)}`;
-  }
-
-  // 3. Classification Engine
-  let classification: Awaited<ReturnType<typeof classifyFirm>> = {
+    aumSourceDescription: null,
     strategies: {},
     focusAreas: {},
-    status: "needs_review",
+    classificationStatus: "needs_review",
     droppedTags: [],
-    raw: "",
   };
   try {
-    classification = await classifyFirm({ firmName: params.name, domain: domainResult.domain, strategyDetail: null });
+    core = await researchFirmCore({ firmName: params.name });
   } catch (e) {
-    researchWarning ??= `Classification failed: ${errorMessage(e)}`;
+    researchWarning = `Research failed: ${errorMessage(e)}`;
   }
 
   const band = await getMandateSettings();
-  const withinMandate = deriveWithinMandate(aum.aumValue, { aumMin: Number(band.aumMin), aumMax: Number(band.aumMax) });
+  const withinMandate = deriveWithinMandate(core.aumValue, { aumMin: Number(band.aumMin), aumMax: Number(band.aumMax) });
 
   const firm = await prisma.firm.create({
     data: {
       name: params.name,
-      domain: domainResult.domain,
-      domainResolutionStatus: domainResult.status,
-      hqLocation: domainResult.hqLocation,
-      aumValue: aum.aumValue,
-      aumDisplay: aum.aumDisplay,
-      aumAsOf: aum.aumAsOf ? new Date(aum.aumAsOf) : null,
-      aumConfidence: aum.aumConfidence,
+      domain: core.domain,
+      domainResolutionStatus: core.domainStatus,
+      hqLocation: core.hqLocation,
+      aumValue: core.aumValue,
+      aumDisplay: core.aumDisplay,
+      aumAsOf: core.aumAsOf ? new Date(core.aumAsOf) : null,
+      aumConfidence: core.aumConfidence,
       withinMandate,
-      strategies: classification.strategies,
-      focusAreas: classification.focusAreas,
-      classificationStatus: classification.status,
+      strategies: core.strategies,
+      focusAreas: core.focusAreas,
+      classificationStatus: core.classificationStatus,
       classificationSource: "engine",
       classifiedAt: new Date(),
       sourceType: params.sourceType,
@@ -138,13 +122,13 @@ export async function runFirmResearchPipeline(params: {
 
   await createPendingTask(firm.id, firm.name, "send_email");
 
-  if (aum.sourceDescription) {
+  if (core.aumSourceDescription) {
     await prisma.researchSource.create({
-      data: { entityType: "firm", entityId: firm.id, fieldName: "aum_value", sourceUrlOrDescription: aum.sourceDescription },
+      data: { entityType: "firm", entityId: firm.id, fieldName: "aum_value", sourceUrlOrDescription: core.aumSourceDescription },
     });
   }
 
-  for (const [parent, children] of Object.entries(classification.strategies)) {
+  for (const [parent, children] of Object.entries(core.strategies)) {
     for (const child of children) {
       await prisma.researchSource.create({
         data: {
@@ -156,7 +140,7 @@ export async function runFirmResearchPipeline(params: {
       });
     }
   }
-  for (const [parent, children] of Object.entries(classification.focusAreas)) {
+  for (const [parent, children] of Object.entries(core.focusAreas)) {
     for (const child of children) {
       await prisma.researchSource.create({
         data: {
@@ -171,9 +155,9 @@ export async function runFirmResearchPipeline(params: {
 
   // 4. Contact Discovery
   let primaryContactFound = false;
-  if (domainResult.status === "resolved") {
+  if (core.domainStatus === "resolved") {
     try {
-      const contacts = await discoverContacts({ firmName: params.name, domain: domainResult.domain });
+      const contacts = await discoverContacts({ firmName: params.name, domain: core.domain });
       for (const c of contacts) {
         const contact = await prisma.contact.create({
           data: {
@@ -193,11 +177,11 @@ export async function runFirmResearchPipeline(params: {
         primaryContactFound = primaryContactFound || c.rank === 1;
 
         // 5. Hunter.io email enrichment
-        if ((await isHunterConfigured()) && domainResult.domain) {
+        if ((await isHunterConfigured()) && core.domain) {
           const [first, ...rest] = c.name.split(" ");
           const last = rest.join(" ") || first;
           try {
-            const emailResult = await findEmail({ domain: domainResult.domain, firstName: first, lastName: last });
+            const emailResult = await findEmail({ domain: core.domain, firstName: first, lastName: last });
             if (emailResult.email) {
               await prisma.contact.update({
                 where: { id: contact.id },
@@ -220,8 +204,8 @@ export async function runFirmResearchPipeline(params: {
   return {
     firmId: firm.id,
     name: firm.name,
-    domainResolutionStatus: domainResult.status,
-    classificationStatus: classification.status,
+    domainResolutionStatus: core.domainStatus,
+    classificationStatus: core.classificationStatus,
     primaryContactFound,
     researchWarning,
   };

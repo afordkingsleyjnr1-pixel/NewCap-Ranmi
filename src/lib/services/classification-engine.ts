@@ -55,7 +55,7 @@ export async function classifyFirm(params: {
     "\nSearch the firm's website (About, Investment Strategy, Portfolio, Funds, Team, Investor Relations, News, Transactions pages) and respond with the strict JSON classification only.",
   ].join("\n");
 
-  const raw = await runWebResearch({ system: CLASSIFICATION_SYSTEM_PROMPT, user: userMessage, maxTokens: 2048 });
+  const raw = await runWebResearch({ system: CLASSIFICATION_SYSTEM_PROMPT, user: userMessage, maxTokens: 2048, maxUses: 4 });
   const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
 
   const stratResult = validateTaxonomySelection(parsed?.strategies, STRATEGIES_TAXONOMY);
