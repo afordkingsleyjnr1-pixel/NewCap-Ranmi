@@ -19,6 +19,13 @@ export async function firmScopeWhere(user: SessionUser) {
   return { crmStage: { ownerId: user.id } };
 }
 
+/** Same data_scope rule applied to projects: all_firms roles see every project; everyone else sees only projects they own or are a member of. */
+export async function projectScopeWhere(user: SessionUser) {
+  const role = await getUserRole(user);
+  if (role.dataScope === "all_firms") return {};
+  return { OR: [{ ownerId: user.id }, { members: { some: { userId: user.id } } }] };
+}
+
 export class ForbiddenError extends Error {
   constructor(message = "Forbidden") {
     super(message);

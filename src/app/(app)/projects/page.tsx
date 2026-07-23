@@ -1,31 +1,47 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Pill } from "@/components/ui/badge";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
-import { formatDate, cn } from "@/lib/utils";
+import { Pill } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Avatar } from "@/components/ui/avatar";
+import { Plus, Building2, ListChecks, Calendar } from "lucide-react";
+import { formatDate } from "@/lib/utils";
+import { AllTasksTab } from "./_components/all-tasks-tab";
+import { CreateProjectModal } from "./_components/create-project-modal";
 
-interface TaskRow {
+interface ProjectRow {
   id: string;
-  title: string;
+  name: string;
+  description: string | null;
+  type: string | null;
+  status: "active" | "on_hold" | "completed";
+  startDate: string;
   dueDate: string | null;
-  status: "open" | "done";
-  isFromTemplate: boolean;
-  firm: { id: string; name: string };
-  owner: { name: string } | null;
+  owner: { id: string; name: string };
+  members: Array<{ user: { id: string; name: string } }>;
+  firms: Array<{ firmId: string }>;
+  tasks: Array<{ id: string; status: "open" | "done"; dueDate: string | null }>;
 }
 
+const STATUS_COLOR: Record<ProjectRow["status"], "green" | "amber" | "gray"> = {
+  active: "green",
+  on_hold: "amber",
+  completed: "gray",
+};
+
 export default function ProjectsPage() {
-  const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const router = useRouter();
+  const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [createOpen, setCreateOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch("/api/tasks");
+    const res = await fetch("/api/projects");
     const data = await res.json();
-    setTasks(data.tasks ?? []);
+    setProjects(data.projects ?? []);
     setLoading(false);
   }, []);
 
@@ -33,78 +49,83 @@ export default function ProjectsPage() {
     load();
   }, [load]);
 
-  async function toggleDone(task: TaskRow) {
-    await fetch(`/api/tasks/${task.id}`, { method: "PATCH", body: JSON.stringify({ status: task.status === "done" ? "open" : "done" }) });
-    load();
-  }
-
-  async function remove(id: string) {
-    if (!confirm("Delete this task? This cannot be undone.")) return;
-    await fetch(`/api/tasks/${id}`, { method: "DELETE" });
-    load();
-  }
-
-  const now = new Date();
-
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-text-primary">Projects</h1>
-        <p className="text-sm text-text-secondary">Every open task across every firm, sorted by due date</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-text-primary">Projects</h1>
+          <p className="text-sm text-text-secondary">Group firms, contacts, tasks, and team members around one initiative</p>
+        </div>
+        <Button size="sm" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5" /> Create Project
+        </Button>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th className="w-8"></th>
-              <th>Task</th>
-              <th>Firm</th>
-              <th>Due Date</th>
-              <th>Owner</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-text-secondary">
-                  Loading…
-                </td>
-              </tr>
+      <Tabs defaultValue="projects">
+        <TabsList>
+          <TabsTrigger value="projects">Projects</TabsTrigger>
+          <TabsTrigger value="all-tasks">All Tasks</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="projects">
+          <div className="pt-4">
+            {loading && <p className="py-8 text-center text-sm text-text-secondary">Loading…</p>}
+            {!loading && projects.length === 0 && (
+              <div className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-text-secondary">
+                No projects yet. Click Create Project to set up your first workspace.
+              </div>
             )}
-            {!loading && tasks.length === 0 && (
-              <tr>
-                <td colSpan={6} className="py-8 text-center text-text-secondary">
-                  No open tasks. Checklists auto-generate when a firm reaches Term Sheet / LOI.
-                </td>
-              </tr>
-            )}
-            {tasks.map((t) => {
-              const overdue = t.dueDate && t.status === "open" && new Date(t.dueDate) < now;
-              return (
-                <tr key={t.id}>
-                  <td>
-                    <Checkbox checked={t.status === "done"} onCheckedChange={() => toggleDone(t)} />
-                  </td>
-                  <td className={cn(t.status === "done" && "text-text-secondary line-through")}>
-                    {t.title}
-                    {t.isFromTemplate && <Pill color="gray" className="ml-2">Checklist</Pill>}
-                  </td>
-                  <td className="text-accent">{t.firm.name}</td>
-                  <td>{overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : t.dueDate ? formatDate(t.dueDate) : "—"}</td>
-                  <td className="text-text-secondary">{t.owner?.name ?? "—"}</td>
-                  <td>
-                    <button onClick={() => remove(t.id)} className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {projects.map((p) => {
+                const openTasks = p.tasks.filter((t) => t.status === "open").length;
+                const doneTasks = p.tasks.filter((t) => t.status === "done").length;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => router.push(`/projects/${p.id}`)}
+                    className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-sm font-semibold text-text-primary">{p.name}</h3>
+                      <Pill color={STATUS_COLOR[p.status]}>{p.status.replace("_", " ")}</Pill>
+                    </div>
+                    {p.description && <p className="line-clamp-2 text-xs text-text-secondary">{p.description}</p>}
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="h-3.5 w-3.5" /> {p.firms.length} firm{p.firms.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <ListChecks className="h-3.5 w-3.5" /> {openTasks} open · {doneTasks} done
+                      </span>
+                      {p.dueDate && (
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" /> Due {formatDate(p.dueDate)}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between border-t border-border pt-2.5">
+                      <div className="flex -space-x-1.5">
+                        {p.members.slice(0, 4).map((m) => (
+                          <Avatar key={m.user.id} name={m.user.name} className="ring-2 ring-surface" />
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-text-secondary">Owner: {p.owner.name}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="all-tasks">
+          <div className="pt-4">
+            <AllTasksTab />
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <CreateProjectModal open={createOpen} onOpenChange={setCreateOpen} onCreated={load} />
     </div>
   );
 }
