@@ -102,6 +102,11 @@ export async function runFirmResearchPipeline(params: {
       `${params.name}: domain ${core.domainStatus === "resolved" ? `resolved (${core.domain})` : core.domainStatus}, ` +
         `AUM ${core.aumDisplay}, ${Object.keys(core.strategies).length + Object.keys(core.focusAreas).length ? "classified" : "needs review"}.`
     );
+    if (core.domainStatus !== "resolved") {
+      researchWarning = `Domain could not be confidently resolved (${core.domainStatus}) — contacts and email lookup were skipped. Confirm the domain manually in the firm drawer, then run Find Contact.`;
+    } else if (core.contacts.length === 0) {
+      researchWarning = "No public contact information was found for this firm. Use Add Contact in the firm drawer to enter one manually.";
+    }
   } catch (e) {
     researchWarning = `Research failed: ${errorMessage(e)}`;
     emit(`${params.name}: research failed — ${errorMessage(e)}`);
