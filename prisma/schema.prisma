@@ -376,14 +376,16 @@ model EmailThread {
 }
 
 model EmailMessage {
-  id         String            @id @default(uuid())
-  threadId   String            @map("thread_id")
-  thread     EmailThread       @relation(fields: [threadId], references: [id])
-  direction  MessageDirection
-  body       String            @db.Text
-  isFollowUp Boolean           @default(false) @map("is_follow_up")
-  sentAt     DateTime          @default(now()) @map("sent_at")
+  id                String            @id @default(uuid())
+  threadId          String            @map("thread_id")
+  thread            EmailThread       @relation(fields: [threadId], references: [id])
+  direction         MessageDirection
+  body              String            @db.Text
+  isFollowUp        Boolean           @default(false) @map("is_follow_up")
+  providerMessageId String?           @map("provider_message_id")
+  sentAt            DateTime          @default(now()) @map("sent_at")
 
+  @@index([threadId, providerMessageId])
   @@map("email_messages")
 }
 

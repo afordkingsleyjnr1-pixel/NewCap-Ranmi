@@ -7,11 +7,24 @@ import { createNotification } from "./notifications";
  * Gmail and Outlook reply webhooks so the stage-transition logic lives in
  * one place.
  */
-export async function handleInboundReply(params: { threadId: string; body: string; notifyUserId: string }) {
+export async function handleInboundReply(params: {
+  threadId: string;
+  body: string;
+  notifyUserId: string;
+  providerMessageId?: string;
+  sentAt?: Date;
+}) {
   const thread = await prisma.emailThread.findUniqueOrThrow({ where: { id: params.threadId } });
 
   await prisma.emailMessage.create({
-    data: { threadId: thread.id, direction: "inbound", body: params.body, isFollowUp: false },
+    data: {
+      threadId: thread.id,
+      direction: "inbound",
+      body: params.body,
+      isFollowUp: false,
+      providerMessageId: params.providerMessageId ?? null,
+      sentAt: params.sentAt ?? new Date(),
+    },
   });
   await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date() } });
 
