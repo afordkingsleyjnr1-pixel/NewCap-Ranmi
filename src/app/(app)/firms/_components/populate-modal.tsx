@@ -48,6 +48,7 @@ export function PopulateModal({
   const [geography, setGeography] = useState("");
   const [aumMin, setAumMin] = useState("");
   const [aumMax, setAumMax] = useState("");
+  const [targetCount, setTargetCount] = useState("10");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PopulateResult | null>(null);
@@ -82,6 +83,7 @@ export function PopulateModal({
     setGeography("");
     setAumMin("");
     setAumMax("");
+    setTargetCount("10");
   }
 
   async function submit() {
@@ -99,6 +101,7 @@ export function PopulateModal({
           geography: geography || null,
           aumBand: aumMin || aumMax ? { min: Number(aumMin) || undefined, max: Number(aumMax) || undefined } : null,
         };
+        body.targetCount = Number(targetCount) || 10;
       }
       const res = await fetch("/api/populate", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
@@ -160,6 +163,18 @@ export function PopulateModal({
                   <Label>AUM max</Label>
                   <AumInput value={aumMax} onChange={setAumMax} placeholder="15" />
                 </div>
+              </div>
+              <div>
+                <Label>Number of firms to add</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={targetCount}
+                  onChange={(e) => setTargetCount(e.target.value)}
+                  className="w-24"
+                />
+                <p className="mt-1 text-xs text-text-secondary">How many new firms to search for and add in this run (1–50).</p>
               </div>
               <Button variant="ghost" size="sm" onClick={clearSelection}>
                 Clear Selection
