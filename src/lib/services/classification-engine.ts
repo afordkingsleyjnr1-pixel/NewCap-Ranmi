@@ -38,8 +38,11 @@ export interface ClassificationResult {
 }
 
 /**
- * Runs the shared classification pipeline for a firm. Called from both
- * Add Firm (5.1) and Populate (5.10) — one engine, two entry points.
+ * Standalone classification-only re-run, used by the Reclassify endpoints
+ * (single firm and "Reclassify All"). Add Firm no longer calls this — it
+ * gets classification as part of the combined call in firm-core-research.ts
+ * — but Reclassify still needs a classification-only call since it already
+ * has a domain and shouldn't burn a search budget re-resolving it.
  */
 export async function classifyFirm(params: {
   firmName: string;
@@ -47,15 +50,19 @@ export async function classifyFirm(params: {
   strategyDetail: string | null;
 }): Promise<ClassificationResult> {
   const userMessage = [
-    buildTaxonomyReference(),
-    "",
     `Classify this investment manager: ${params.firmName}`,
     params.domain ? `Website domain: ${params.domain}` : "No known website domain — search to find it first.",
     params.strategyDetail ? `\nExisting research notes on file:\n${params.strategyDetail}` : "",
     "\nSearch the firm's website (About, Investment Strategy, Portfolio, Funds, Team, Investor Relations, News, Transactions pages) and respond with the strict JSON classification only.",
   ].join("\n");
 
-  const raw = await runWebResearch({ system: CLASSIFICATION_SYSTEM_PROMPT, user: userMessage, maxTokens: 2048, maxUses: 4 });
+  const raw = await runWebResearch({
+    system: CLASSIFICATION_SYSTEM_PROMPT,
+    cacheableSystemExtra: buildTaxonomyReference(),
+    user: userMessage,
+    maxTokens: 2048,
+    maxUses: 4,
+  });
   const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
 
   const stratResult = validateTaxonomySelection(parsed?.strategies, STRATEGIES_TAXONOMY);

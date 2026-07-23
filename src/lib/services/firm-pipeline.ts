@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/db";
 import { researchFirmCore } from "./firm-core-research";
-import { discoverContacts } from "./contact-discovery";
 import { findEmail, isHunterConfigured } from "./hunter";
 import { isAnthropicConfigured } from "@/lib/anthropic";
 import { getMandateSettings, deriveWithinMandate } from "./mandate";
@@ -25,15 +24,18 @@ function errorMessage(e: unknown): string {
 
 /**
  * The single shared research pipeline behind Add Firm (5.1) and every candidate
- * Populate surfaces (5.10): one combined domain+AUM+classification research
- * call → Contact Discovery → Hunter email enrichment. Writes research_sources
- * rows throughout so every field stays traceable (Section 4.5).
+ * Populate surfaces (5.10): one combined domain+AUM+classification+contacts
+ * research call → Hunter email enrichment. Writes research_sources rows
+ * throughout so every field stays traceable (Section 4.5).
  *
- * Domain/AUM/classification are one Claude call (see firm-core-research.ts)
- * rather than three, to share a single web_search budget instead of each
- * step paying for its own — search calls are billed per-use independent of
- * token cost, so this is the main cost lever. Contact discovery stays a
- * second, separate call since it's a distinct task.
+ * Domain/AUM/classification/contacts are one Claude call (see
+ * firm-core-research.ts) rather than four, to share a single web_search
+ * budget instead of each step paying for its own — search calls are billed
+ * per-use independent of token cost, so this is the main cost lever.
+ *
+ * `onProgress` is optional — the streaming Add Firm endpoint passes it to
+ * surface live status to the UI; callers that don't care (Populate,
+ * reclassify) simply omit it.
  *
  * Each AI-dependent step still degrades independently — a billing error,
  * rate limit, or transient API failure never blocks the others or crashes
@@ -47,8 +49,12 @@ export async function runFirmResearchPipeline(params: {
   sourceType: SourceType;
   populateRunId?: string | null;
   similarToFirmId?: string | null;
+  onProgress?: (message: string) => void;
 }): Promise<PipelineOutcome> {
+  const emit = params.onProgress ?? (() => {});
+
   if (!isAnthropicConfigured()) {
+    emit(`${params.name}: no Anthropic API key configured — adding without research.`);
     const firm = await prisma.firm.create({
       data: {
         name: params.name,
@@ -73,7 +79,8 @@ export async function runFirmResearchPipeline(params: {
 
   let researchWarning: string | null = null;
 
-  // 1-3. Domain resolution + AUM research + Classification, combined into one call.
+  // 1-4. Domain resolution + AUM research + Classification + Contacts, combined into one call.
+  emit(`${params.name}: researching domain, AUM, strategy classification, and contacts…`);
   let core: Awaited<ReturnType<typeof researchFirmCore>> = {
     domain: null,
     domainStatus: "unresolved",
@@ -87,16 +94,23 @@ export async function runFirmResearchPipeline(params: {
     focusAreas: {},
     classificationStatus: "needs_review",
     droppedTags: [],
+    contacts: [],
   };
   try {
     core = await researchFirmCore({ firmName: params.name });
+    emit(
+      `${params.name}: domain ${core.domainStatus === "resolved" ? `resolved (${core.domain})` : core.domainStatus}, ` +
+        `AUM ${core.aumDisplay}, ${Object.keys(core.strategies).length + Object.keys(core.focusAreas).length ? "classified" : "needs review"}.`
+    );
   } catch (e) {
     researchWarning = `Research failed: ${errorMessage(e)}`;
+    emit(`${params.name}: research failed — ${errorMessage(e)}`);
   }
 
   const band = await getMandateSettings();
   const withinMandate = deriveWithinMandate(core.aumValue, { aumMin: Number(band.aumMin), aumMax: Number(band.aumMax) });
 
+  emit(`${params.name}: saving firm record…`);
   const firm = await prisma.firm.create({
     data: {
       name: params.name,
@@ -153,53 +167,55 @@ export async function runFirmResearchPipeline(params: {
     }
   }
 
-  // 4. Contact Discovery
+  // 5. Save contacts found by the combined research call + Hunter email enrichment.
   let primaryContactFound = false;
-  if (core.domainStatus === "resolved") {
-    try {
-      const contacts = await discoverContacts({ firmName: params.name, domain: core.domain });
-      for (const c of contacts) {
-        const contact = await prisma.contact.create({
-          data: {
-            firmId: firm.id,
-            name: c.name,
-            title: c.title,
-            linkedinUrl: c.linkedinUrl,
-            rank: c.rank,
-            isPrimaryBdContact: c.rank === 1,
-          },
+  if (core.contacts.length > 0) {
+    emit(`${params.name}: found ${core.contacts.length} contact(s), looking up email${core.contacts.length > 1 ? "s" : ""}…`);
+  }
+  try {
+    for (const c of core.contacts) {
+      const contact = await prisma.contact.create({
+        data: {
+          firmId: firm.id,
+          name: c.name,
+          title: c.title,
+          linkedinUrl: c.linkedinUrl,
+          rank: c.rank,
+          isPrimaryBdContact: c.rank === 1,
+        },
+      });
+      if (c.sourceDescription) {
+        await prisma.researchSource.create({
+          data: { entityType: "contact", entityId: contact.id, fieldName: "name_title", sourceUrlOrDescription: c.sourceDescription },
         });
-        if (c.sourceDescription) {
-          await prisma.researchSource.create({
-            data: { entityType: "contact", entityId: contact.id, fieldName: "name_title", sourceUrlOrDescription: c.sourceDescription },
-          });
-        }
-        primaryContactFound = primaryContactFound || c.rank === 1;
+      }
+      primaryContactFound = primaryContactFound || c.rank === 1;
 
-        // 5. Hunter.io email enrichment
-        if ((await isHunterConfigured()) && core.domain) {
-          const [first, ...rest] = c.name.split(" ");
-          const last = rest.join(" ") || first;
-          try {
-            const emailResult = await findEmail({ domain: core.domain, firstName: first, lastName: last });
-            if (emailResult.email) {
-              await prisma.contact.update({
-                where: { id: contact.id },
-                data: { email: emailResult.email, emailStatus: emailResult.status, emailSource: emailResult.source },
-              });
-              await prisma.researchSource.create({
-                data: { entityType: "contact", entityId: contact.id, fieldName: "email", sourceUrlOrDescription: emailResult.source },
-              });
-            }
-          } catch {
-            // Hunter failure shouldn't fail the whole pipeline — contact stays email_status=unknown.
+      // Hunter.io email enrichment — deterministic lookup, not an AI call.
+      if ((await isHunterConfigured()) && core.domain) {
+        const [first, ...rest] = c.name.split(" ");
+        const last = rest.join(" ") || first;
+        try {
+          const emailResult = await findEmail({ domain: core.domain, firstName: first, lastName: last });
+          if (emailResult.email) {
+            await prisma.contact.update({
+              where: { id: contact.id },
+              data: { email: emailResult.email, emailStatus: emailResult.status, emailSource: emailResult.source },
+            });
+            await prisma.researchSource.create({
+              data: { entityType: "contact", entityId: contact.id, fieldName: "email", sourceUrlOrDescription: emailResult.source },
+            });
           }
+        } catch {
+          // Hunter failure shouldn't fail the whole pipeline — contact stays email_status=unknown.
         }
       }
-    } catch (e) {
-      researchWarning ??= `Contact discovery failed: ${errorMessage(e)}`;
     }
+  } catch (e) {
+    researchWarning ??= `Saving contacts failed: ${errorMessage(e)}`;
   }
+
+  emit(`${params.name}: done.`);
 
   return {
     firmId: firm.id,

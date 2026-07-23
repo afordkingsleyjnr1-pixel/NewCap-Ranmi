@@ -31,19 +31,34 @@ export const RESEARCH_MODEL = "claude-haiku-4-5-20251001";
  * `maxUses` caps how many searches a single call can run — each search is
  * billed separately from token usage, so this is the main spend lever
  * alongside consolidating multiple research steps into fewer calls.
+ *
+ * `cacheableSystemExtra` is for large, byte-identical-across-calls content
+ * (e.g. the Strategies/Focus Areas taxonomy JSON) — it's sent as its own
+ * system block with `cache_control`, so repeated calls within the cache
+ * window (~5 min) pay full price only once instead of on every single call.
+ * Below Anthropic's minimum cacheable block size (~2048 tokens for Haiku),
+ * the block is simply not cached — no error, just no savings.
  */
 export async function runWebResearch(params: {
   system: string;
   user: string;
   maxTokens?: number;
   maxUses?: number;
+  cacheableSystemExtra?: string;
 }): Promise<string> {
   const anthropic = getAnthropicClient();
+
+  const systemBlocks: Anthropic.Messages.TextBlockParam[] = [
+    { type: "text", text: params.system, cache_control: { type: "ephemeral" } },
+  ];
+  if (params.cacheableSystemExtra) {
+    systemBlocks.push({ type: "text", text: params.cacheableSystemExtra, cache_control: { type: "ephemeral" } });
+  }
 
   const response = await anthropic.messages.create({
     model: RESEARCH_MODEL,
     max_tokens: params.maxTokens ?? 4096,
-    system: params.system,
+    system: systemBlocks,
     tools: [
       {
         type: "web_search_20250305",
