@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea, Input, Label } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { StepProgress } from "@/components/ui/step-progress";
+import { AumInput } from "@/components/ui/aum-input";
 import { Loader2 } from "lucide-react";
 import { TaxonomyPicker } from "./taxonomy-picker";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
@@ -191,18 +192,18 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                 <Label>Focus Areas</Label>
                 <TaxonomyPicker taxonomy={FOCUS_AREAS_TAXONOMY} selection={focusAreas} onChange={setFocusAreas} />
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-1">
-                  <Label>Market</Label>
-                  <Input value={market} onChange={(e) => setMarket(e.target.value)} placeholder="Southeast US" />
+              <div>
+                <Label>Market</Label>
+                <Input value={market} onChange={(e) => setMarket(e.target.value)} placeholder="Southeast US" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>AUM min</Label>
+                  <AumInput value={aumMin} onChange={setAumMin} placeholder="1" />
                 </div>
                 <div>
-                  <Label>AUM min (USD)</Label>
-                  <Input value={aumMin} onChange={(e) => setAumMin(e.target.value)} placeholder="1000000000" />
-                </div>
-                <div>
-                  <Label>AUM max (USD)</Label>
-                  <Input value={aumMax} onChange={(e) => setAumMax(e.target.value)} placeholder="15000000000" />
+                  <Label>AUM max</Label>
+                  <AumInput value={aumMax} onChange={setAumMax} placeholder="15" />
                 </div>
               </div>
               <p className="text-xs text-text-secondary">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { AumInput } from "@/components/ui/aum-input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Pill } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
@@ -89,12 +90,12 @@ export function AccountSettingsTab() {
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Min (USD)</Label>
-                  <Input value={mandate.aumMin} onChange={(e) => setMandate({ ...mandate, aumMin: e.target.value })} />
+                  <Label>Min</Label>
+                  <AumInput value={mandate.aumMin} onChange={(v) => setMandate({ ...mandate, aumMin: v })} />
                 </div>
                 <div>
-                  <Label>Max (USD)</Label>
-                  <Input value={mandate.aumMax} onChange={(e) => setMandate({ ...mandate, aumMax: e.target.value })} />
+                  <Label>Max</Label>
+                  <AumInput value={mandate.aumMax} onChange={(v) => setMandate({ ...mandate, aumMax: v })} />
                 </div>
               </div>
               <p className="text-xs text-text-secondary">Editing this immediately recomputes Within Mandate for every existing firm.</p>
