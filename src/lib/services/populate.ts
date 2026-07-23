@@ -10,6 +10,14 @@ Respond with strict JSON only:
 {"candidates": ["Firm Name 1", "Firm Name 2", ...]}
 Return up to 15 real, currently-operating firm names. Never invent a firm. If you cannot find confident matches, return an empty array.`;
 
+// Cost/runaway-spend guards. Without these, "Populate the whole database"
+// runs one search call per EXISTING firm (cost scales with database size,
+// not with what you're actually looking for), and any Populate run could
+// silently add and fully research dozens of firms from one click. Both are
+// capped here rather than left to trust the model's own restraint.
+const MAX_DATABASE_WIDE_BRIEFS = 10;
+const MAX_FIRMS_ADDED_PER_RUN = 20;
+
 interface SearchBrief {
   strategies?: Record<string, string[]>;
   focusAreas?: Record<string, string[]>;
@@ -59,7 +67,9 @@ export async function runPopulate(params: {
   seedFirmId?: string;
   criteria?: SearchBrief;
   triggeredById: string;
+  onProgress?: (message: string) => void;
 }): Promise<PopulateResult> {
+  const emit = params.onProgress ?? (() => {});
   if (!isAnthropicConfigured()) {
     throw new Error("ANTHROPIC_API_KEY is not set. Populate requires the Classification/Research engine to be configured.");
   }
@@ -89,7 +99,10 @@ export async function runPopulate(params: {
   } else if (params.mode === "by_criteria") {
     briefs = [params.criteria!];
   } else {
-    const allFirms = await prisma.firm.findMany({ where: { deletedAt: null } });
+    // Capped and ordered by most-recently-added — a bounded, representative
+    // sample of current mandate focus instead of one search call per firm
+    // ever added, which would make cost scale with database size.
+    const allFirms = await prisma.firm.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: MAX_DATABASE_WIDE_BRIEFS });
     briefs = allFirms.map((f: { strategies: unknown; focusAreas: unknown; hqLocation: string | null; aumValue: unknown; targetMarkets: string[] }) => ({
       strategies: f.strategies as Record<string, string[]>,
       focusAreas: f.focusAreas as Record<string, string[]>,
@@ -99,6 +112,7 @@ export async function runPopulate(params: {
     }));
   }
 
+  emit(`Searching for candidate firms matching ${briefs.length > 1 ? `${briefs.length} briefs` : "your criteria"}…`);
   const allCandidateNames = new Set<string>();
   for (const brief of briefs) {
     try {
@@ -109,6 +123,7 @@ export async function runPopulate(params: {
       // mode with many firms) shouldn't abort the whole run — keep going.
     }
   }
+  emit(`Found ${allCandidateNames.size} candidate(s)${allCandidateNames.size > MAX_FIRMS_ADDED_PER_RUN ? ` — adding the first ${MAX_FIRMS_ADDED_PER_RUN}` : ""}.`);
 
   let firmsAdded = 0;
   let firmsSkippedDuplicate = 0;
@@ -116,6 +131,8 @@ export async function runPopulate(params: {
   const researchWarnings: string[] = [];
 
   for (const name of allCandidateNames) {
+    if (firmsAdded >= MAX_FIRMS_ADDED_PER_RUN) break;
+
     const dup = await findDuplicate({ name });
     if (dup) {
       firmsSkippedDuplicate++;
@@ -127,6 +144,7 @@ export async function runPopulate(params: {
         sourceType: "comparable",
         populateRunId: run.id,
         similarToFirmId: params.mode === "similar_to_firm" ? params.seedFirmId : null,
+        onProgress: emit,
       });
       firmsAdded++;
       addedFirms.push({ id: outcome.firmId, name: outcome.name });

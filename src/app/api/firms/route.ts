@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { requirePermission, firmScopeWhere, ForbiddenError } from "@/lib/authz";
 import { findDuplicate } from "@/lib/services/dedupe";
 import { runFirmResearchPipeline } from "@/lib/services/firm-pipeline";
+import { ndjsonResponse } from "@/lib/ndjson-server";
 import { Prisma } from "@/generated/prisma";
 
 export async function GET(req: NextRequest) {
@@ -86,46 +87,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Provide at least one firm name" }, { status: 400 });
   }
 
-  const added: { id: string; name: string }[] = [];
-  const needsDomainConfirmation: { id: string; name: string }[] = [];
-  const skippedDuplicates: string[] = [];
-  const researchWarnings: string[] = [];
-  const failed: string[] = [];
+  // Streamed as NDJSON so the UI can show live progress instead of one long
+  // silent wait — see ndjson-server.ts / ndjson-client.ts.
+  return ndjsonResponse(async (send) => {
+    const added: { id: string; name: string }[] = [];
+    const needsDomainConfirmation: { id: string; name: string }[] = [];
+    const skippedDuplicates: string[] = [];
+    const researchWarnings: string[] = [];
+    const failed: string[] = [];
 
-  for (const name of names) {
-    const dup = await findDuplicate({ name });
-    if (dup) {
-      skippedDuplicates.push(`${name} (matches existing "${dup.name}")`);
-      continue;
+    for (const name of names) {
+      const dup = await findDuplicate({ name });
+      if (dup) {
+        skippedDuplicates.push(`${name} (matches existing "${dup.name}")`);
+        send({ type: "progress", message: `${name}: already in the database — skipped.` });
+        continue;
+      }
+
+      try {
+        const outcome = await runFirmResearchPipeline({
+          name,
+          sourceType: "manual_add",
+          onProgress: (message) => send({ type: "progress", message }),
+        });
+        if (outcome.domainResolutionStatus === "resolved") {
+          added.push({ id: outcome.firmId, name: outcome.name });
+        } else {
+          needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
+        }
+        if (outcome.researchWarning) {
+          researchWarnings.push(`${name}: ${outcome.researchWarning}`);
+        }
+      } catch (e) {
+        // A step failing shouldn't take down the whole batch — one bad name
+        // (or a full API outage) still lets the rest of the list get added.
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        failed.push(`${name}: ${msg}`);
+        send({ type: "progress", message: `${name}: failed — ${msg}` });
+      }
     }
 
-    try {
-      const outcome = await runFirmResearchPipeline({ name, sourceType: "manual_add" });
-      if (outcome.domainResolutionStatus === "resolved") {
-        added.push({ id: outcome.firmId, name: outcome.name });
-      } else {
-        needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
-      }
-      if (outcome.researchWarning) {
-        researchWarnings.push(`${name}: ${outcome.researchWarning}`);
-      }
-    } catch (e) {
-      // A step failing shouldn't take down the whole batch — one bad name
-      // (or a full API outage) still lets the rest of the list get added.
-      failed.push(`${name}: ${e instanceof Error ? e.message : "Unknown error"}`);
-    }
-  }
-
-  return NextResponse.json({
-    summary: {
-      addedCount: added.length,
-      needsDomainConfirmationCount: needsDomainConfirmation.length,
-      skippedDuplicateCount: skippedDuplicates.length,
-    },
-    added,
-    needsDomainConfirmation,
-    skippedDuplicates,
-    researchWarnings,
-    failed,
+    return {
+      summary: {
+        addedCount: added.length,
+        needsDomainConfirmationCount: needsDomainConfirmation.length,
+        skippedDuplicateCount: skippedDuplicates.length,
+      },
+      added,
+      needsDomainConfirmation,
+      skippedDuplicates,
+      researchWarnings,
+      failed,
+    };
   });
 }

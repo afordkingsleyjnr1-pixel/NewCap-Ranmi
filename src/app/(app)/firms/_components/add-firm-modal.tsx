@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Textarea, Input, Label } from "@/components/ui/input";
@@ -8,6 +8,7 @@ import { Pill } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 import { TaxonomyPicker } from "./taxonomy-picker";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+import { readNdjsonStream } from "@/lib/ndjson-client";
 
 interface AddFirmSummary {
   summary: { addedCount: number; needsDomainConfirmationCount: number; skippedDuplicateCount: number };
@@ -45,16 +46,28 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progressLog, setProgressLog] = useState<string[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [progressLog]);
 
   const hasCriteria = Object.keys(strategies).length > 0 || Object.keys(focusAreas).length > 0 || market.trim().length > 0 || aumMin || aumMax;
 
   async function submitByName() {
     setLoading(true);
     setError(null);
+    setProgressLog([]);
     try {
       const res = await fetch("/api/firms", { method: "POST", body: JSON.stringify({ names }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to add firms");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Failed to add firms");
+      }
+      const data = await readNdjsonStream<AddFirmSummary>(res, (event) => {
+        if (typeof event.message === "string") setProgressLog((prev) => [...prev, event.message as string]);
+      });
       setNameResult(data);
       onDone();
     } catch (e) {
@@ -67,6 +80,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
   async function submitByCriteria() {
     setLoading(true);
     setError(null);
+    setProgressLog([]);
     try {
       const res = await fetch("/api/populate", {
         method: "POST",
@@ -80,8 +94,13 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
           },
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Search failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Search failed");
+      }
+      const data = await readNdjsonStream<CriteriaResult>(res, (event) => {
+        if (typeof event.message === "string") setProgressLog((prev) => [...prev, event.message as string]);
+      });
       setCriteriaResult(data);
       onDone();
     } catch (e) {
@@ -102,6 +121,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
     setNameResult(null);
     setCriteriaResult(null);
     setError(null);
+    setProgressLog([]);
     onOpenChange(false);
   }
 
@@ -177,6 +197,19 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                 The platform searches for managers matching this brief, skips anything already in the database, and runs
                 the full research pipeline (classification, AUM, contacts, email) on every new match.
               </p>
+            </div>
+          )}
+
+          {loading && (
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-page p-2.5 font-mono text-[11px] text-text-secondary">
+              {progressLog.length === 0 && <p className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Starting…</p>}
+              {progressLog.map((line, i) => (
+                <p key={i} className={i === progressLog.length - 1 ? "text-text-primary" : undefined}>
+                  {i === progressLog.length - 1 && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
+                  {line}
+                </p>
+              ))}
+              <div ref={logEndRef} />
             </div>
           )}
 
