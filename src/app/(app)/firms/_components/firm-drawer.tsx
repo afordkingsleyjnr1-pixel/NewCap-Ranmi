@@ -21,6 +21,7 @@ interface Props {
 
 export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   const [data, setData] = useState<any>(null);
+  const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [populateOpen, setPopulateOpen] = useState(false);
@@ -37,6 +38,14 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (firmId) {
+      fetch("/api/users")
+        .then((r) => r.json())
+        .then((d) => setUsers((d.users ?? []).filter((u: any) => u.status === "active")));
+    }
+  }, [firmId]);
 
   const { handleAction, modals: nextStepModals } = useNextStepActions(() => {
     load();
@@ -68,6 +77,14 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   async function changeStage(stage: string) {
     setBusy("stage");
     await fetch(`/api/crm/${firmId}/stage`, { method: "PATCH", body: JSON.stringify({ stage }) });
+    await load();
+    onChanged();
+    setBusy(null);
+  }
+
+  async function changeOwner(ownerId: string) {
+    setBusy("owner");
+    await fetch(`/api/firms/${firmId}`, { method: "PATCH", body: JSON.stringify({ ownerId: ownerId || null }) });
     await load();
     onChanged();
     setBusy(null);
@@ -162,13 +179,24 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label>CRM Stage</Label>
                 <Select value={firm.crmStage?.stage} onChange={(e) => changeStage(e.target.value)} disabled={busy === "stage"}>
                   {CRM_STAGES.map((s) => (
                     <option key={s} value={s}>
                       {STAGE_LABELS[s]}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <Label>Owner</Label>
+                <Select value={firm.crmStage?.ownerId ?? ""} onChange={(e) => changeOwner(e.target.value)} disabled={busy === "owner"}>
+                  <option value="">Unassigned</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
                     </option>
                   ))}
                 </Select>

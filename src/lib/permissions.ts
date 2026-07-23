@@ -26,4 +26,22 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
 };
 
 export const ADMIN_ROLE_NAME = "Admin";
+export const EDITOR_ROLE_NAME = "Editor";
 export const VIEWER_ROLE_NAME = "Viewer";
+
+// Standard three-tier workspace roles — Admin has every permission
+// (including workspace-level settings/team/billing-adjacent actions);
+// Editor can do everything content-related (firms, contacts, outreach,
+// meetings, tasks, Populate, export) but can't touch account settings or
+// team/role management; Viewer is read-only. Used to seed the system
+// default roles on bootstrap and via migration for already-provisioned
+// databases — see prisma/migrations/*_editor_role.
+export const EDITOR_PERMISSIONS: Permission[] = [
+  "edit_firms",
+  "manage_contacts",
+  "send_outreach",
+  "manage_meetings",
+  "manage_tasks",
+  "run_populate",
+  "export_data",
+];
