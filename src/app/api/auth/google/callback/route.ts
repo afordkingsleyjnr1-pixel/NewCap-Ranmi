@@ -7,7 +7,23 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const userId = searchParams.get("state");
-  if (!code || !userId) return NextResponse.redirect(new URL("/settings?error=oauth", req.url));
+
+  if (!code || !userId) {
+    // Google redirects back with its own ?error=...&error_description=...
+    // (access_denied, redirect_uri_mismatch, invalid_client, etc.) instead of
+    // a code when something is wrong before our app ever runs — that used to
+    // be indistinguishable from every other failure.
+    const googleError = searchParams.get("error");
+    const googleErrorDescription = searchParams.get("error_description");
+    const reason = googleError
+      ? `Google returned an error: ${googleError}${googleErrorDescription ? ` — ${googleErrorDescription}` : ""}`
+      : "No authorization code returned.";
+    console.error("Gmail OAuth callback: no code/state.", { googleError, googleErrorDescription });
+    const url = new URL("/settings", req.url);
+    url.searchParams.set("error", "oauth");
+    url.searchParams.set("reason", reason);
+    return NextResponse.redirect(url);
+  }
 
   try {
     const tokens = await exchangeGoogleCode(code);

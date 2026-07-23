@@ -8,7 +8,22 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const code = searchParams.get("code");
   const userId = searchParams.get("state");
-  if (!code || !userId) return NextResponse.redirect(new URL("/settings?error=oauth", req.url));
+
+  if (!code || !userId) {
+    // Microsoft redirects back with its own ?error=...&error_description=...
+    // (access_denied, redirect_uri_mismatch, invalid_client, etc.) instead of
+    // a code when something is wrong before our app ever runs.
+    const msError = searchParams.get("error");
+    const msErrorDescription = searchParams.get("error_description");
+    const reason = msError
+      ? `Microsoft returned an error: ${msError}${msErrorDescription ? ` — ${msErrorDescription}` : ""}`
+      : "No authorization code returned.";
+    console.error("Outlook OAuth callback: no code/state.", { msError, msErrorDescription });
+    const url = new URL("/settings", req.url);
+    url.searchParams.set("error", "oauth");
+    url.searchParams.set("reason", reason);
+    return NextResponse.redirect(url);
+  }
 
   try {
     const tokens = await exchangeMicrosoftCode(code);
