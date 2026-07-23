@@ -32,6 +32,7 @@ interface EmailFinderResponse {
     score?: number;
     verification?: { status?: string };
   };
+  errors?: Array<{ id?: string; code?: number; details?: string }>;
 }
 
 interface DomainSearchResponse {
@@ -39,10 +40,30 @@ interface DomainSearchResponse {
     pattern?: string;
     emails?: Array<{ value: string; confidence: number }>;
   };
+  errors?: Array<{ id?: string; code?: number; details?: string }>;
 }
 
 interface VerifierResponse {
   data?: { status?: string; score?: number };
+  errors?: Array<{ id?: string; code?: number; details?: string }>;
+}
+
+/** Hunter expects a bare domain ("example.com") — strips protocol, "www.", path, and query if the AI-resolved domain included any of them. */
+function normalizeDomain(domain: string): string {
+  return domain
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split("/")[0]
+    .split("?")[0]
+    .toLowerCase();
+}
+
+/** Hunter returns 2xx with a top-level `errors` array (not an HTTP error) on invalid key, no credits, rate limits, etc. — surface it instead of silently treating it as "no match found". */
+function hunterErrorMessage(res: Response, json: { errors?: Array<{ code?: number; details?: string }> }): string | null {
+  if (res.ok && !json.errors?.length) return null;
+  const detail = json.errors?.[0]?.details ?? json.errors?.[0]?.code ?? res.statusText;
+  return `Hunter.io error (HTTP ${res.status}): ${detail}`;
 }
 
 export interface HunterEmailResult {
@@ -75,15 +96,18 @@ export async function findEmail(params: {
   if (!apiKey) {
     throw new Error("Hunter.io API key is not set. Add it in Settings → Account Settings to enable email enrichment.");
   }
+  const domain = normalizeDomain(params.domain);
 
   const finderUrl = new URL(`${HUNTER_BASE}/email-finder`);
-  finderUrl.searchParams.set("domain", params.domain);
+  finderUrl.searchParams.set("domain", domain);
   finderUrl.searchParams.set("first_name", params.firstName);
   finderUrl.searchParams.set("last_name", params.lastName);
   finderUrl.searchParams.set("api_key", apiKey);
 
   const finderRes = await fetch(finderUrl.toString());
   const finderJson: EmailFinderResponse = await finderRes.json();
+  const finderError = hunterErrorMessage(finderRes, finderJson);
+  if (finderError) throw new Error(finderError);
 
   if (finderJson.data?.email) {
     const verified = finderJson.data.verification?.status === "valid";
@@ -101,14 +125,16 @@ export async function findEmail(params: {
 
   // Fall back to Domain Search pattern + construct.
   const domainUrl = new URL(`${HUNTER_BASE}/domain-search`);
-  domainUrl.searchParams.set("domain", params.domain);
+  domainUrl.searchParams.set("domain", domain);
   domainUrl.searchParams.set("api_key", apiKey);
 
   const domainRes = await fetch(domainUrl.toString());
   const domainJson: DomainSearchResponse = await domainRes.json();
+  const domainError = hunterErrorMessage(domainRes, domainJson);
+  if (domainError) throw new Error(domainError);
 
   if (domainJson.data?.pattern) {
-    const constructed = applyNamePattern(domainJson.data.pattern, params.firstName, params.lastName, params.domain);
+    const constructed = applyNamePattern(domainJson.data.pattern, params.firstName, params.lastName, domain);
     return {
       email: constructed,
       status: "inferred",
@@ -130,5 +156,7 @@ export async function verifyEmail(email: string): Promise<{ status: string | nul
 
   const res = await fetch(url.toString());
   const json: VerifierResponse = await res.json();
+  const error = hunterErrorMessage(res, json);
+  if (error) throw new Error(error);
   return { status: json.data?.status ?? null, score: json.data?.score ?? null };
 }

@@ -192,22 +192,30 @@ export async function runFirmResearchPipeline(params: {
       primaryContactFound = primaryContactFound || c.rank === 1;
 
       // Hunter.io email enrichment — deterministic lookup, not an AI call.
-      if ((await isHunterConfigured()) && core.domain) {
-        const [first, ...rest] = c.name.split(" ");
-        const last = rest.join(" ") || first;
-        try {
-          const emailResult = await findEmail({ domain: core.domain, firstName: first, lastName: last });
-          if (emailResult.email) {
-            await prisma.contact.update({
-              where: { id: contact.id },
-              data: { email: emailResult.email, emailStatus: emailResult.status, emailSource: emailResult.source },
-            });
-            await prisma.researchSource.create({
-              data: { entityType: "contact", entityId: contact.id, fieldName: "email", sourceUrlOrDescription: emailResult.source },
-            });
+      if (core.domain) {
+        if (await isHunterConfigured()) {
+          const [first, ...rest] = c.name.split(" ");
+          const last = rest.join(" ") || first;
+          try {
+            const emailResult = await findEmail({ domain: core.domain, firstName: first, lastName: last });
+            if (emailResult.email) {
+              await prisma.contact.update({
+                where: { id: contact.id },
+                data: { email: emailResult.email, emailStatus: emailResult.status, emailSource: emailResult.source },
+              });
+              await prisma.researchSource.create({
+                data: { entityType: "contact", entityId: contact.id, fieldName: "email", sourceUrlOrDescription: emailResult.source },
+              });
+            }
+          } catch (e) {
+            // A Hunter failure on one contact shouldn't fail the whole pipeline —
+            // the contact stays email_status=unknown — but it must still be
+            // visible instead of looking identical to "no email found".
+            researchWarning ??= `Hunter.io lookup failed for ${c.name}: ${errorMessage(e)}`;
+            emit(`${params.name}: Hunter.io lookup failed for ${c.name} — ${errorMessage(e)}`);
           }
-        } catch {
-          // Hunter failure shouldn't fail the whole pipeline — contact stays email_status=unknown.
+        } else {
+          emit(`${params.name}: Hunter.io is not configured — skipping email lookup for ${c.name}.`);
         }
       }
     }

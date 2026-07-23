@@ -106,6 +106,13 @@ export default function ProjectDetailPage() {
     load();
   }
 
+  async function deleteProject() {
+    if (!project) return;
+    if (!confirm(`Delete project "${project.name}"? Firms and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
+    await fetch(`/api/projects/${params.id}`, { method: "DELETE" });
+    router.push("/projects");
+  }
+
   async function removeMember(userId: string) {
     if (!confirm("Remove this team member from the project?")) return;
     await fetch(`/api/projects/${params.id}/members/${userId}`, { method: "DELETE" });
@@ -161,6 +168,9 @@ export default function ProjectDetailPage() {
             {project.dueDate ? ` · Due ${formatDate(project.dueDate)}` : ""}
           </p>
         </div>
+        <Button size="sm" variant="destructive" onClick={deleteProject}>
+          <Trash2 className="h-3.5 w-3.5" /> Delete Project
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
