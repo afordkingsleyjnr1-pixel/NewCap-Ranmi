@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Textarea, Input, Label } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
+import { StepProgress } from "@/components/ui/step-progress";
 import { Loader2 } from "lucide-react";
 import { TaxonomyPicker } from "./taxonomy-picker";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
 import { readNdjsonStream } from "@/lib/ndjson-client";
+import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
 
 interface AddFirmSummary {
   summary: { addedCount: number; needsDomainConfirmationCount: number; skippedDuplicateCount: number };
@@ -46,28 +48,36 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [progressLog, setProgressLog] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [progressLog]);
+  const [progressFirm, setProgressFirm] = useState<string | null>(null);
+  const [progressStep, setProgressStep] = useState(0);
+  const [firmsDone, setFirmsDone] = useState(0);
 
   const hasCriteria = Object.keys(strategies).length > 0 || Object.keys(focusAreas).length > 0 || market.trim().length > 0 || aumMin || aumMax;
+  const namesCount = names.split(/[\n,]/).map((n) => n.trim()).filter(Boolean).length;
+
+  function handleProgressEvent(event: { type: string; [k: string]: unknown }) {
+    if (typeof event.message !== "string") return;
+    setProgressFirm((prevFirm) => {
+      const { firm, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
+      if (firm !== prevFirm && prevFirm !== null) setFirmsDone((n) => n + 1);
+      setProgressStep((prevStep) => (firm !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
+      return firm;
+    });
+  }
 
   async function submitByName() {
     setLoading(true);
     setError(null);
-    setProgressLog([]);
+    setProgressFirm(null);
+    setProgressStep(0);
+    setFirmsDone(0);
     try {
       const res = await fetch("/api/firms", { method: "POST", body: JSON.stringify({ names }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to add firms");
       }
-      const data = await readNdjsonStream<AddFirmSummary>(res, (event) => {
-        if (typeof event.message === "string") setProgressLog((prev) => [...prev, event.message as string]);
-      });
+      const data = await readNdjsonStream<AddFirmSummary>(res, handleProgressEvent);
       setNameResult(data);
       onDone();
     } catch (e) {
@@ -80,7 +90,9 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
   async function submitByCriteria() {
     setLoading(true);
     setError(null);
-    setProgressLog([]);
+    setProgressFirm(null);
+    setProgressStep(0);
+    setFirmsDone(0);
     try {
       const res = await fetch("/api/populate", {
         method: "POST",
@@ -98,9 +110,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Search failed");
       }
-      const data = await readNdjsonStream<CriteriaResult>(res, (event) => {
-        if (typeof event.message === "string") setProgressLog((prev) => [...prev, event.message as string]);
-      });
+      const data = await readNdjsonStream<CriteriaResult>(res, handleProgressEvent);
       setCriteriaResult(data);
       onDone();
     } catch (e) {
@@ -121,7 +131,9 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
     setNameResult(null);
     setCriteriaResult(null);
     setError(null);
-    setProgressLog([]);
+    setProgressFirm(null);
+    setProgressStep(0);
+    setFirmsDone(0);
     onOpenChange(false);
   }
 
@@ -201,15 +213,18 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
           )}
 
           {loading && (
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-page p-2.5 font-mono text-[11px] text-text-secondary">
-              {progressLog.length === 0 && <p className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Starting…</p>}
-              {progressLog.map((line, i) => (
-                <p key={i} className={i === progressLog.length - 1 ? "text-text-primary" : undefined}>
-                  {i === progressLog.length - 1 && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
-                  {line}
-                </p>
-              ))}
-              <div ref={logEndRef} />
+            <div className="rounded-md border border-border bg-page px-3 py-2.5">
+              <p className="mb-1 text-center text-xs font-medium text-text-primary">
+                {progressFirm ? (
+                  <>
+                    {mode === "by_name" && namesCount > 1 ? `Firm ${Math.min(firmsDone + 1, namesCount)} of ${namesCount}: ` : ""}
+                    {progressFirm}
+                  </>
+                ) : (
+                  "Starting…"
+                )}
+              </p>
+              <StepProgress steps={ADD_FIRM_STEPS} activeIndex={progressStep} />
             </div>
           )}
 

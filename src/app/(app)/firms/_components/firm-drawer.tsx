@@ -25,6 +25,7 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [populateOpen, setPopulateOpen] = useState(false);
+  const [findContactWarnings, setFindContactWarnings] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     if (!firmId) return;
@@ -68,7 +69,14 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
 
   async function findContact() {
     setBusy("findContact");
-    await fetch(`/api/firms/${firmId}/find-contact`, { method: "POST" });
+    setFindContactWarnings([]);
+    const res = await fetch(`/api/firms/${firmId}/find-contact`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setFindContactWarnings([data.error ?? "Find Contact failed."]);
+    } else if (data.warnings?.length) {
+      setFindContactWarnings(data.warnings);
+    }
     await load();
     onChanged();
     setBusy(null);
@@ -308,6 +316,15 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                   <Button size="sm" variant="outline" onClick={findContact} disabled={busy === "findContact"}>
                     <UserSearch className="h-3.5 w-3.5" /> {busy === "findContact" ? "Researching…" : "Find Contact"}
                   </Button>
+                  {findContactWarnings.length > 0 && (
+                    <div className="rounded-md bg-status-amber-bg p-2.5">
+                      {findContactWarnings.map((w, i) => (
+                        <p key={i} className="text-xs text-status-amber">
+                          {w}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                   {firm.contacts.map((c: any) => (
                     <div key={c.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
                       <div>

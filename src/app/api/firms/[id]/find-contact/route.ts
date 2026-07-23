@@ -25,6 +25,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const discovered = await discoverContacts({ firmName: firm.name, domain: firm.domain });
   const created = [];
+  const warnings: string[] = [];
+  const hunterConfigured = await isHunterConfigured();
+  if (!hunterConfigured) {
+    warnings.push("Hunter.io is not configured — contacts were found but email lookup was skipped. Add a Hunter.io API key in Settings → Account Settings.");
+  }
 
   for (const c of discovered) {
     const contact = await prisma.contact.create({
@@ -36,7 +41,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       });
     }
 
-    if (await isHunterConfigured()) {
+    if (hunterConfigured) {
       const [first, ...rest] = c.name.split(" ");
       const last = rest.join(" ") || first;
       try {
@@ -47,12 +52,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
             data: { email: emailResult.email, emailStatus: emailResult.status, emailSource: emailResult.source },
           });
         }
-      } catch {
-        // non-fatal
+      } catch (e) {
+        warnings.push(`Hunter.io lookup failed for ${c.name}: ${e instanceof Error ? e.message : "Unknown error"}`);
       }
     }
     created.push(contact);
   }
 
-  return NextResponse.json({ contacts: created });
+  return NextResponse.json({ contacts: created, warnings });
 }

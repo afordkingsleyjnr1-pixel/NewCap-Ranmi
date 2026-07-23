@@ -11,6 +11,10 @@ import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
 import { AddFirmModal } from "./_components/add-firm-modal";
 import { PopulateModal } from "./_components/populate-modal";
 import { FirmDrawer } from "./_components/firm-drawer";
+import { FirmContextMenu, type FirmContextMenuTarget } from "./_components/firm-context-menu";
+import { AddToProjectModal } from "./_components/add-to-project-modal";
+import { QuickAddTaskModal } from "./_components/quick-add-task-modal";
+import { AddNoteModal } from "./_components/add-note-modal";
 import { NextStepCell } from "../crm/_components/next-step-cell";
 import { useNextStepActions } from "../crm/_components/use-next-step-actions";
 import type { FirmListItem } from "@/lib/types";
@@ -31,6 +35,11 @@ export default function FirmsPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [populateOpen, setPopulateOpen] = useState(false);
   const [openFirmId, setOpenFirmId] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<FirmContextMenuTarget | null>(null);
+  const [contextPopulateTarget, setContextPopulateTarget] = useState<{ id: string; name: string } | null>(null);
+  const [addToProjectTarget, setAddToProjectTarget] = useState<{ id: string; name: string } | null>(null);
+  const [addTaskTarget, setAddTaskTarget] = useState<{ id: string; name: string } | null>(null);
+  const [addNoteTarget, setAddNoteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const searchParams = useSearchParams();
 
@@ -223,7 +232,14 @@ export default function FirmsPage() {
             {firms.map((firm) => {
               const primaryContact = firm.contacts[0];
               return (
-                <tr key={firm.id} onClick={() => setOpenFirmId(firm.id)}>
+                <tr
+                  key={firm.id}
+                  onClick={() => setOpenFirmId(firm.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, firmId: firm.id, firmName: firm.name, domain: firm.domain });
+                  }}
+                >
                   <td onClick={(e) => e.stopPropagation()}>
                     <Checkbox checked={selected.has(firm.id)} onCheckedChange={() => toggleSelect(firm.id)} />
                   </td>
@@ -289,6 +305,77 @@ export default function FirmsPage() {
       />
       <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
       {modals}
+
+      {contextMenu && (
+        <FirmContextMenu
+          target={contextMenu}
+          onClose={() => setContextMenu(null)}
+          onEdit={() => {
+            setOpenFirmId(contextMenu.firmId);
+            setContextMenu(null);
+          }}
+          onAddToProject={() => {
+            setAddToProjectTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setContextMenu(null);
+          }}
+          onAssignOwner={async (userId) => {
+            await fetch(`/api/firms/${contextMenu.firmId}`, { method: "PATCH", body: JSON.stringify({ ownerId: userId }) });
+            setContextMenu(null);
+            load();
+          }}
+          onAddTask={() => {
+            setAddTaskTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setContextMenu(null);
+          }}
+          onAddNote={() => {
+            setAddNoteTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setContextMenu(null);
+          }}
+          onFindSimilar={() => {
+            setContextPopulateTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setContextMenu(null);
+          }}
+          onDelete={async () => {
+            if (confirm(`Delete ${contextMenu.firmName}? This soft-deletes the firm — it can be restored later from Settings.`)) {
+              await fetch(`/api/firms/${contextMenu.firmId}`, { method: "DELETE" });
+              load();
+            }
+            setContextMenu(null);
+          }}
+        />
+      )}
+
+      <AddToProjectModal
+        open={!!addToProjectTarget}
+        onOpenChange={(o) => !o && setAddToProjectTarget(null)}
+        firmId={addToProjectTarget?.id ?? null}
+        firmName={addToProjectTarget?.name}
+        onAdded={load}
+      />
+      <QuickAddTaskModal
+        open={!!addTaskTarget}
+        onOpenChange={(o) => !o && setAddTaskTarget(null)}
+        firmId={addTaskTarget?.id ?? null}
+        firmName={addTaskTarget?.name}
+        onAdded={load}
+      />
+      <AddNoteModal
+        open={!!addNoteTarget}
+        onOpenChange={(o) => !o && setAddNoteTarget(null)}
+        firmId={addNoteTarget?.id ?? null}
+        firmName={addNoteTarget?.name}
+        onAdded={load}
+      />
+      {contextPopulateTarget && (
+        <PopulateModal
+          open={!!contextPopulateTarget}
+          onOpenChange={(o) => !o && setContextPopulateTarget(null)}
+          onDone={load}
+          initialMode="similar_to_firm"
+          seedFirmId={contextPopulateTarget.id}
+          seedFirmName={contextPopulateTarget.name}
+        />
+      )}
     </div>
   );
 }

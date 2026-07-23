@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
-import { Plus, Building2, ListChecks, Calendar } from "lucide-react";
+import { Plus, Building2, ListChecks, Calendar, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { AllTasksTab } from "./_components/all-tasks-tab";
 import { CreateProjectModal } from "./_components/create-project-modal";
@@ -49,6 +49,13 @@ export default function ProjectsPage() {
     load();
   }, [load]);
 
+  async function deleteProject(e: MouseEvent, id: string, name: string) {
+    e.stopPropagation();
+    if (!confirm(`Delete project "${name}"? Firms and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
+    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    load();
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -80,14 +87,26 @@ export default function ProjectsPage() {
                 const openTasks = p.tasks.filter((t) => t.status === "open").length;
                 const doneTasks = p.tasks.filter((t) => t.status === "done").length;
                 return (
-                  <button
+                  <div
                     key={p.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => router.push(`/projects/${p.id}`)}
-                    className="flex flex-col gap-2.5 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary"
+                    onKeyDown={(e) => e.key === "Enter" && router.push(`/projects/${p.id}`)}
+                    className="flex cursor-pointer flex-col gap-2.5 rounded-lg border border-border bg-surface p-4 text-left transition-colors hover:border-primary"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-sm font-semibold text-text-primary">{p.name}</h3>
-                      <Pill color={STATUS_COLOR[p.status]}>{p.status.replace("_", " ")}</Pill>
+                      <div className="flex items-center gap-1.5">
+                        <Pill color={STATUS_COLOR[p.status]}>{p.status.replace("_", " ")}</Pill>
+                        <button
+                          onClick={(e) => deleteProject(e, p.id, p.name)}
+                          className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red"
+                          title="Delete project"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </div>
                     {p.description && <p className="line-clamp-2 text-xs text-text-secondary">{p.description}</p>}
                     <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
@@ -111,7 +130,7 @@ export default function ProjectsPage() {
                       </div>
                       <span className="text-[11px] text-text-secondary">Owner: {p.owner.name}</span>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

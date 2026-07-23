@@ -1,14 +1,16 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
+import { StepProgress } from "@/components/ui/step-progress";
 import { TaxonomyPicker } from "./taxonomy-picker";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
 import { Loader2 } from "lucide-react";
 import { readNdjsonStream } from "@/lib/ndjson-client";
+import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
 
 type Mode = "similar_to_firm" | "by_criteria" | "database_wide";
 
@@ -48,8 +50,8 @@ export function PopulateModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PopulateResult | null>(null);
-  const [progressLog, setProgressLog] = useState<string[]>([]);
-  const logEndRef = useRef<HTMLDivElement>(null);
+  const [progressFirm, setProgressFirm] = useState<string | null>(null);
+  const [progressStep, setProgressStep] = useState(0);
 
   useEffect(() => {
     if (open) {
@@ -58,14 +60,20 @@ export function PopulateModal({
       setFocusAreas(initialFocusAreas ?? {});
       setResult(null);
       setError(null);
-      setProgressLog([]);
+      setProgressFirm(null);
+      setProgressStep(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }, [progressLog]);
+  function handleProgressEvent(event: { type: string; [k: string]: unknown }) {
+    if (typeof event.message !== "string") return;
+    setProgressFirm((prevFirm) => {
+      const { firm, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
+      setProgressStep((prevStep) => (firm !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
+      return firm;
+    });
+  }
 
   function clearSelection() {
     setStrategies({});
@@ -78,7 +86,8 @@ export function PopulateModal({
   async function submit() {
     setLoading(true);
     setError(null);
-    setProgressLog([]);
+    setProgressFirm(null);
+    setProgressStep(0);
     try {
       const body: Record<string, unknown> = { mode };
       if (mode === "similar_to_firm") body.seedFirmId = seedFirmId;
@@ -95,9 +104,7 @@ export function PopulateModal({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Populate failed");
       }
-      const data = await readNdjsonStream<PopulateResult>(res, (event) => {
-        if (typeof event.message === "string") setProgressLog((prev) => [...prev, event.message as string]);
-      });
+      const data = await readNdjsonStream<PopulateResult>(res, handleProgressEvent);
       setResult(data);
       onDone();
     } catch (e) {
@@ -167,15 +174,9 @@ export function PopulateModal({
           )}
 
           {loading && (
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border bg-page p-2.5 font-mono text-[11px] text-text-secondary">
-              {progressLog.length === 0 && <p className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Starting…</p>}
-              {progressLog.map((line, i) => (
-                <p key={i} className={i === progressLog.length - 1 ? "text-text-primary" : undefined}>
-                  {i === progressLog.length - 1 && <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />}
-                  {line}
-                </p>
-              ))}
-              <div ref={logEndRef} />
+            <div className="rounded-md border border-border bg-page px-3 py-2.5">
+              <p className="mb-1 text-center text-xs font-medium text-text-primary">{progressFirm ?? "Searching for candidates…"}</p>
+              <StepProgress steps={ADD_FIRM_STEPS} activeIndex={progressStep} />
             </div>
           )}
 
