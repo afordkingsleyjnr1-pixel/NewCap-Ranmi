@@ -4,11 +4,14 @@ import { findDuplicate } from "./dedupe";
 import { runFirmResearchPipeline } from "./firm-pipeline";
 import type { PopulateMode } from "@/generated/prisma";
 
-const CANDIDATE_SEARCH_SYSTEM_PROMPT = `You are a manager-sourcing research analyst for an institutional capital-introduction platform. Given a search brief describing an investment strategy, focus area, geography, and AUM band, find real institutional investment managers that plausibly match ALL of the criteria.
+function candidateSearchPrompt(desiredCount: number, exclude?: string[]): string {
+  const excludeLine = exclude?.length ? `\nDo not repeat any of these already-found firms: ${exclude.join(", ")}.` : "";
+  return `You are a manager-sourcing research analyst for an institutional capital-introduction platform. Given a search brief describing an investment strategy, focus area, geography, and AUM band, find real institutional investment managers that plausibly match ALL of the criteria.
 
 Respond with strict JSON only:
 {"candidates": ["Firm Name 1", "Firm Name 2", ...]}
-Return up to 15 real, currently-operating firm names. Never invent a firm. If you cannot find confident matches, return an empty array.`;
+Return up to ${desiredCount} real, currently-operating firm names. Never invent a firm. If you cannot find confident matches, return an empty array.${excludeLine}`;
+}
 
 // Cost/runaway-spend guards. Without these, "Populate the whole database"
 // runs one search call per EXISTING firm (cost scales with database size,
@@ -17,6 +20,14 @@ Return up to 15 real, currently-operating firm names. Never invent a firm. If yo
 // capped here rather than left to trust the model's own restraint.
 const MAX_DATABASE_WIDE_BRIEFS = 10;
 const MAX_FIRMS_ADDED_PER_RUN = 20;
+// User-facing "Number of firms" input (By Strategy & Focus Area mode) is
+// clamped to this range — floor keeps a run meaningful, ceiling keeps a
+// single click from triggering a very large research bill.
+const MIN_TARGET_COUNT = 1;
+const MAX_TARGET_COUNT = 50;
+// Extra candidate-search rounds attempted when the first pass comes up
+// short of the requested count, before settling for however many were found.
+const MAX_SEARCH_ROUNDS = 3;
 
 interface SearchBrief {
   strategies?: Record<string, string[]>;
@@ -42,9 +53,9 @@ function briefToPrompt(brief: SearchBrief): string {
   return lines.join("\n");
 }
 
-async function searchCandidates(brief: SearchBrief): Promise<string[]> {
+async function searchCandidates(brief: SearchBrief, desiredCount: number, exclude?: string[]): Promise<string[]> {
   const raw = await runWebResearch({
-    system: CANDIDATE_SEARCH_SYSTEM_PROMPT,
+    system: candidateSearchPrompt(desiredCount, exclude),
     user: briefToPrompt(brief),
     maxTokens: 1024,
     maxUses: 4,
@@ -66,6 +77,8 @@ export async function runPopulate(params: {
   mode: PopulateMode;
   seedFirmId?: string;
   criteria?: SearchBrief;
+  /** "Number of firms" the user asked for (By Strategy & Focus Area mode only). Clamped to [1, 50]; other modes ignore this and keep the flat 20-per-run cap. */
+  targetCount?: number;
   triggeredById: string;
   onProgress?: (message: string) => void;
 }): Promise<PopulateResult> {
@@ -73,6 +86,11 @@ export async function runPopulate(params: {
   if (!isAnthropicConfigured()) {
     throw new Error("ANTHROPIC_API_KEY is not set. Populate requires the Classification/Research engine to be configured.");
   }
+
+  const maxFirmsToAdd =
+    params.mode === "by_criteria" && params.targetCount
+      ? Math.min(MAX_TARGET_COUNT, Math.max(MIN_TARGET_COUNT, Math.round(params.targetCount)))
+      : MAX_FIRMS_ADDED_PER_RUN;
 
   const run = await prisma.populateRun.create({
     data: {
@@ -114,16 +132,38 @@ export async function runPopulate(params: {
 
   emit(`Searching for candidate firms matching ${briefs.length > 1 ? `${briefs.length} briefs` : "your criteria"}…`);
   const allCandidateNames = new Set<string>();
+  // Ask for a bit more than needed per round since some candidates will turn
+  // out to be duplicates already in the database.
+  const perBriefTarget = Math.min(15, Math.ceil((maxFirmsToAdd * 1.5) / briefs.length));
+
   for (const brief of briefs) {
     try {
-      const names = await searchCandidates(brief);
+      const names = await searchCandidates(brief, perBriefTarget);
       names.forEach((n) => allCandidateNames.add(n));
     } catch {
       // One brief's search failing (e.g. transient API error in database_wide
       // mode with many firms) shouldn't abort the whole run — keep going.
     }
   }
-  emit(`Found ${allCandidateNames.size} candidate(s)${allCandidateNames.size > MAX_FIRMS_ADDED_PER_RUN ? ` — adding the first ${MAX_FIRMS_ADDED_PER_RUN}` : ""}.`);
+
+  // by_criteria is the one mode with a single, user-facing target count, so
+  // it's worth an extra round or two of searching (excluding names already
+  // found) if the first pass came up short — the other modes run one brief
+  // per existing firm and aren't asking for a specific headcount.
+  if (params.mode === "by_criteria") {
+    for (let round = 0; round < MAX_SEARCH_ROUNDS && allCandidateNames.size < maxFirmsToAdd; round++) {
+      emit(`Found ${allCandidateNames.size} of ${maxFirmsToAdd} requested — searching for more…`);
+      try {
+        const more = await searchCandidates(briefs[0], maxFirmsToAdd - allCandidateNames.size, Array.from(allCandidateNames));
+        if (more.length === 0) break;
+        more.forEach((n) => allCandidateNames.add(n));
+      } catch {
+        break;
+      }
+    }
+  }
+
+  emit(`Found ${allCandidateNames.size} candidate(s)${allCandidateNames.size > maxFirmsToAdd ? ` — adding the first ${maxFirmsToAdd}` : ""}.`);
 
   let firmsAdded = 0;
   let firmsSkippedDuplicate = 0;
@@ -131,7 +171,7 @@ export async function runPopulate(params: {
   const researchWarnings: string[] = [];
 
   for (const name of allCandidateNames) {
-    if (firmsAdded >= MAX_FIRMS_ADDED_PER_RUN) break;
+    if (firmsAdded >= maxFirmsToAdd) break;
 
     const dup = await findDuplicate({ name });
     if (dup) {

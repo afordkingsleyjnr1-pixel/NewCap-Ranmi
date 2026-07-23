@@ -21,6 +21,7 @@ export async function POST(req: NextRequest) {
       mode: body.mode,
       seedFirmId: body.seedFirmId,
       criteria: body.criteria,
+      targetCount: body.targetCount,
       triggeredById: user!.id,
       onProgress: (message) => send({ type: "progress", message }),
     });

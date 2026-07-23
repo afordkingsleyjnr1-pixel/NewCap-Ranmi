@@ -45,6 +45,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
   const [market, setMarket] = useState("");
   const [aumMin, setAumMin] = useState("");
   const [aumMax, setAumMax] = useState("");
+  const [targetCount, setTargetCount] = useState("10");
   const [criteriaResult, setCriteriaResult] = useState<CriteriaResult | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -105,6 +106,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
             geography: market || null,
             aumBand: aumMin || aumMax ? { min: Number(aumMin) || undefined, max: Number(aumMax) || undefined } : null,
           },
+          targetCount: Number(targetCount) || 10,
         }),
       });
       if (!res.ok) {
@@ -129,6 +131,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
     setMarket("");
     setAumMin("");
     setAumMax("");
+    setTargetCount("10");
     setNameResult(null);
     setCriteriaResult(null);
     setError(null);
@@ -205,6 +208,18 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                   <Label>AUM max</Label>
                   <AumInput value={aumMax} onChange={setAumMax} placeholder="15" />
                 </div>
+              </div>
+              <div>
+                <Label>Number of firms to add</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={targetCount}
+                  onChange={(e) => setTargetCount(e.target.value)}
+                  className="w-24"
+                />
+                <p className="mt-1 text-xs text-text-secondary">How many new firms to search for and add in this run (1–50).</p>
               </div>
               <p className="text-xs text-text-secondary">
                 The platform searches for managers matching this brief, skips anything already in the database, and runs
