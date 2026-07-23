@@ -53,7 +53,7 @@ export interface DiscoveredContact {
 
 export async function discoverContacts(params: { firmName: string; domain: string | null }): Promise<DiscoveredContact[]> {
   const user = `Firm: ${params.firmName}${params.domain ? `\nWebsite: ${params.domain}` : ""}\nFind the best-fit capital markets / fundraising contact(s).`;
-  const raw = await runWebResearch({ system: CONTACT_SYSTEM_PROMPT, user, maxTokens: 1536 });
+  const raw = await runWebResearch({ system: CONTACT_SYSTEM_PROMPT, user, maxTokens: 1536, maxUses: 3 });
   const parsed = extractJson<{
     contacts?: Array<{ name?: string; title?: string; linkedin_url?: string; source_description?: string; rank?: number }>;
   }>(raw);

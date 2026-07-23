@@ -39,6 +39,7 @@ async function searchCandidates(brief: SearchBrief): Promise<string[]> {
     system: CANDIDATE_SEARCH_SYSTEM_PROMPT,
     user: briefToPrompt(brief),
     maxTokens: 1024,
+    maxUses: 4,
   });
   const parsed = extractJson<{ candidates?: string[] }>(raw);
   return Array.isArray(parsed?.candidates) ? parsed.candidates.filter((c) => typeof c === "string") : [];
