@@ -23,7 +23,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Only a soft-deleted firm can be purged permanently." }, { status: 400 });
   }
 
-  const contactIds = (await prisma.contact.findMany({ where: { firmId }, select: { id: true } })).map((c) => c.id);
+  const contactIds = (await prisma.contact.findMany({ where: { firmId }, select: { id: true } })).map((c: { id: string }) => c.id);
 
   await prisma.$transaction([
     prisma.researchSource.deleteMany({

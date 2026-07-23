@@ -347,8 +347,8 @@ model EmailConnection {
 
 model EmailThread {
   id                   String       @id @default(uuid())
-  firmId               String       @map("firm_id")
-  firm                 Firm         @relation(fields: [firmId], references: [id])
+  firmId               String?      @map("firm_id")
+  firm                 Firm?        @relation(fields: [firmId], references: [id])
   contactId            String?      @map("contact_id")
   contact              Contact?     @relation(fields: [contactId], references: [id])
   adHocRecipientName   String?      @map("ad_hoc_recipient_name")
@@ -356,6 +356,7 @@ model EmailThread {
   subject              String
   providerThreadId     String?      @map("provider_thread_id")
   status               ThreadStatus @default(awaiting_reply)
+  isFreeForm           Boolean      @default(false) @map("is_free_form")
   followUpSentAt       DateTime?    @map("follow_up_sent_at")
   createdAt            DateTime     @default(now()) @map("created_at")
   lastActivityAt       DateTime     @default(now()) @map("last_activity_at")

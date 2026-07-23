@@ -193,7 +193,7 @@ export async function runFirmResearchPipeline(params: {
         primaryContactFound = primaryContactFound || c.rank === 1;
 
         // 5. Hunter.io email enrichment
-        if (isHunterConfigured() && domainResult.domain) {
+        if ((await isHunterConfigured()) && domainResult.domain) {
           const [first, ...rest] = c.name.split(" ");
           const last = rest.join(" ") || first;
           try {

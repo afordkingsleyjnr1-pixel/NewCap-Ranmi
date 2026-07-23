@@ -56,12 +56,12 @@ export async function GET(req: NextRequest) {
   // Relevant Notifications — unread count per firm, for the grid's alert indicator.
   const unreadCounts = await prisma.notification.groupBy({
     by: ["relatedFirmId"],
-    where: { userId: user.id, isRead: false, relatedFirmId: { in: firms.map((f) => f.id) } },
+    where: { userId: user.id, isRead: false, relatedFirmId: { in: firms.map((f: { id: string }) => f.id) } },
     _count: { _all: true },
   });
-  const unreadByFirm = new Map(unreadCounts.map((c) => [c.relatedFirmId, c._count._all]));
+  const unreadByFirm = new Map(unreadCounts.map((c: { relatedFirmId: string | null; _count: { _all: number } }) => [c.relatedFirmId, c._count._all]));
 
-  const firmsWithAlerts = firms.map((f) => ({ ...f, unreadNotifications: unreadByFirm.get(f.id) ?? 0 }));
+  const firmsWithAlerts = firms.map((f: { id: string }) => ({ ...f, unreadNotifications: unreadByFirm.get(f.id) ?? 0 }));
 
   return NextResponse.json({ firms: firmsWithAlerts });
 }

@@ -15,6 +15,8 @@ export function AccountSettingsTab() {
   const [savingApp, setSavingApp] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassifyResult, setReclassifyResult] = useState<string | null>(null);
+  const [appSaveError, setAppSaveError] = useState<string | null>(null);
+  const [appSaveSuccess, setAppSaveSuccess] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings/mandate").then((r) => r.json()).then((d) => setMandate({ aumMin: d.settings.aumMin, aumMax: d.settings.aumMax }));
@@ -30,14 +32,27 @@ export function AccountSettingsTab() {
 
   async function saveApp() {
     setSavingApp(true);
-    await fetch("/api/settings/app", {
-      method: "PATCH",
-      body: JSON.stringify({ followUpThresholdDays: appSettings.followUpThresholdDays, hunterApiKey: hunterKey || undefined }),
-    });
-    setHunterKey("");
-    const refreshed = await fetch("/api/settings/app").then((r) => r.json());
-    setAppSettings(refreshed);
-    setSavingApp(false);
+    setAppSaveError(null);
+    setAppSaveSuccess(false);
+    try {
+      const res = await fetch("/api/settings/app", {
+        method: "PATCH",
+        body: JSON.stringify({ followUpThresholdDays: appSettings.followUpThresholdDays, hunterApiKey: hunterKey || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setAppSaveError(data.error || `Save failed (HTTP ${res.status}).`);
+        return;
+      }
+      setHunterKey("");
+      const refreshed = await fetch("/api/settings/app").then((r) => r.json());
+      setAppSettings(refreshed);
+      setAppSaveSuccess(true);
+    } catch (e) {
+      setAppSaveError(e instanceof Error ? e.message : "Save failed — check your connection and try again.");
+    } finally {
+      setSavingApp(false);
+    }
   }
 
   async function reclassifyAll() {
@@ -113,6 +128,8 @@ export function AccountSettingsTab() {
               <Button size="sm" onClick={saveApp} disabled={savingApp}>
                 {savingApp && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
               </Button>
+              {appSaveError && <p className="text-xs text-status-red">{appSaveError}</p>}
+              {appSaveSuccess && <p className="text-xs text-status-green">Saved.</p>}
             </>
           )}
         </CardContent>
