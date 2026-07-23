@@ -24,20 +24,22 @@ export async function POST(req: Request) {
   let movedToNoResponse = 0;
 
   const emailSentThreads = await prisma.emailThread.findMany({
-    where: { status: "awaiting_reply", followUpSentAt: null, lastActivityAt: { lte: cutoff } },
+    where: { status: "awaiting_reply", followUpSentAt: null, lastActivityAt: { lte: cutoff }, isFreeForm: false, firmId: { not: null } },
     include: { firm: { include: { crmStage: true } } },
   });
   for (const t of emailSentThreads) {
+    const firmId = t.firmId;
+    if (!t.firm || !firmId) continue;
     if (t.firm.crmStage?.stage === "email_sent") {
-      await prisma.crmStageRow.update({ where: { firmId: t.firmId }, data: { stage: "follow_up_due", stageChangedAt: new Date() } });
-      await prisma.activityLog.create({ data: { firmId: t.firmId, type: "stage_change", body: "Auto-flagged: Follow-Up Due (no reply within threshold)" } });
-      await createPendingTask(t.firmId, t.firm.name, "send_follow_up");
+      await prisma.crmStageRow.update({ where: { firmId } , data: { stage: "follow_up_due", stageChangedAt: new Date() } });
+      await prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Auto-flagged: Follow-Up Due (no reply within threshold)" } });
+      await createPendingTask(firmId, t.firm.name, "send_follow_up");
       const owner = t.firm.crmStage?.ownerId;
       if (owner) {
         await createNotification({
           userId: owner,
           type: "follow_up_due",
-          relatedFirmId: t.firmId,
+          relatedFirmId: firmId,
           body: `Follow-up is due for ${t.firm.name}`,
         });
       }
@@ -46,15 +48,17 @@ export async function POST(req: Request) {
   }
 
   const followedUpThreads = await prisma.emailThread.findMany({
-    where: { status: "awaiting_reply", followUpSentAt: { lte: cutoff } },
+    where: { status: "awaiting_reply", followUpSentAt: { lte: cutoff }, isFreeForm: false, firmId: { not: null } },
     include: { firm: { include: { crmStage: true } } },
   });
   for (const t of followedUpThreads) {
+    const firmId = t.firmId;
+    if (!t.firm || !firmId) continue;
     if (t.firm.crmStage?.stage === "follow_up_sent") {
       await prisma.$transaction([
         prisma.emailThread.update({ where: { id: t.id }, data: { status: "no_response" } }),
-        prisma.crmStageRow.update({ where: { firmId: t.firmId }, data: { stage: "no_response", stageChangedAt: new Date() } }),
-        prisma.activityLog.create({ data: { firmId: t.firmId, type: "stage_change", body: "Auto-flagged: No Response (follow-up threshold passed)" } }),
+        prisma.crmStageRow.update({ where: { firmId } , data: { stage: "no_response", stageChangedAt: new Date() } }),
+        prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Auto-flagged: No Response (follow-up threshold passed)" } }),
       ]);
       movedToNoResponse++;
     }
