@@ -257,6 +257,7 @@ model Contact {
   email            String?
   emailStatus      EmailStatus @default(unknown) @map("email_status")
   emailSource      String?     @map("email_source")
+  alternateEmails  String[]    @default([]) @map("alternate_emails")
   linkedinUrl      String?     @map("linkedin_url")
   rank             Int         @default(1)
   isPrimaryBdContact Boolean   @default(false) @map("is_primary_bd_contact")
@@ -366,6 +367,7 @@ model EmailThread {
   providerThreadId     String?      @map("provider_thread_id")
   status               ThreadStatus @default(awaiting_reply)
   isFreeForm           Boolean      @default(false) @map("is_free_form")
+  hasUnreadReply       Boolean      @default(false) @map("has_unread_reply")
   followUpSentAt       DateTime?    @map("follow_up_sent_at")
   createdAt            DateTime     @default(now()) @map("created_at")
   lastActivityAt       DateTime     @default(now()) @map("last_activity_at")
@@ -383,6 +385,7 @@ model EmailMessage {
   body              String            @db.Text
   isFollowUp        Boolean           @default(false) @map("is_follow_up")
   providerMessageId String?           @map("provider_message_id")
+  attachments       Json?
   sentAt            DateTime          @default(now()) @map("sent_at")
 
   @@index([threadId, providerMessageId])

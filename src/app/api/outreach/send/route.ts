@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { firmId, contactId, adHocName, adHocEmail, subject, message, isFollowUp } = body as {
+  const { firmId, contactId, adHocName, adHocEmail, subject, message, isFollowUp, attachments } = body as {
     firmId: string;
     contactId?: string;
     adHocName?: string;
@@ -24,11 +24,12 @@ export async function POST(req: NextRequest) {
     subject: string;
     message: string;
     isFollowUp?: boolean;
+    attachments?: Array<{ filename: string; mimeType: string; contentBase64: string }>;
   };
   const kind: "email" | "follow_up" | "term_sheet" = body.kind ?? (isFollowUp ? "follow_up" : "email");
 
   try {
-    const result = await sendOutreachToFirm({ userId: user!.id, firmId, contactId, adHocName, adHocEmail, subject, message, kind });
+    const result = await sendOutreachToFirm({ userId: user!.id, firmId, contactId, adHocName, adHocEmail, subject, message, attachments, kind });
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof OutreachError) {

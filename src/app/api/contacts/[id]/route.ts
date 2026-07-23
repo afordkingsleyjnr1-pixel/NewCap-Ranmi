@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const { id } = await params;
   const body = await req.json();
-  const editable = ["name", "title", "email", "emailStatus", "emailSource", "linkedinUrl", "rank", "isPrimaryBdContact"];
+  const editable = ["name", "title", "email", "emailStatus", "emailSource", "alternateEmails", "linkedinUrl", "rank", "isPrimaryBdContact"];
   const data: Record<string, unknown> = {};
   for (const f of editable) if (f in body) data[f] = body[f];
   const contact = await prisma.contact.update({ where: { id }, data });
