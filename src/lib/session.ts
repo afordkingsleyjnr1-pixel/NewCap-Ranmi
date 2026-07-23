@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
+import { EDITOR_PERMISSIONS } from "@/lib/permissions";
 
 // Section 2: "deprioritized for initial build ... single hardcoded/no-login
 // session; add real auth once functionality is working." Real login (Section
@@ -80,6 +81,12 @@ async function bootstrapDefaultAccount(): Promise<SessionUser> {
   await prisma.role.upsert({
     where: { id: "00000000-0000-0000-0000-000000000002" },
     create: { id: "00000000-0000-0000-0000-000000000002", name: "Viewer", permissions: [], dataScope: "all_firms", isSystemDefault: true },
+    update: {},
+  });
+
+  await prisma.role.upsert({
+    where: { id: "00000000-0000-0000-0000-000000000003" },
+    create: { id: "00000000-0000-0000-0000-000000000003", name: "Editor", permissions: EDITOR_PERMISSIONS, dataScope: "all_firms", isSystemDefault: true },
     update: {},
   });
 
