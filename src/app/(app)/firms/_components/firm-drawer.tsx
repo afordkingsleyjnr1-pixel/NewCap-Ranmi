@@ -9,8 +9,9 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Label, Select, Textarea } from "@/components/ui/input";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES, nextStepForFirm } from "@/lib/crm-stages";
 import { formatDate, formatDateTime, cn } from "@/lib/utils";
-import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search } from "lucide-react";
+import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search, Pencil } from "lucide-react";
 import { PopulateModal } from "./populate-modal";
+import { EditContactModal, type EditableContact } from "./edit-contact-modal";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 
 interface Props {
@@ -26,6 +27,7 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   const [populateOpen, setPopulateOpen] = useState(false);
   const [findContactWarnings, setFindContactWarnings] = useState<string[]>([]);
+  const [editingContact, setEditingContact] = useState<EditableContact | null>(null);
 
   const load = useCallback(async () => {
     if (!firmId) return;
@@ -361,11 +363,23 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                             </button>
                           )}
                         </div>
+                        {c.alternateEmails?.length > 0 && (
+                          <p className="text-xs text-text-secondary">Also: {c.alternateEmails.join(", ")}</p>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         <Pill color={c.emailStatus === "verified" ? "green" : c.emailStatus === "inferred" ? "amber" : "gray"}>
                           {c.emailStatus}
                         </Pill>
+                        <button
+                          onClick={() =>
+                            setEditingContact({ id: c.id, name: c.name, title: c.title, email: c.email, alternateEmails: c.alternateEmails ?? [], linkedinUrl: c.linkedinUrl })
+                          }
+                          className="rounded p-1 text-text-secondary hover:bg-page hover:text-accent"
+                          title="Edit contact"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                         <button
                           onClick={() => deleteContact(c.id, c.name)}
                           disabled={busy === `contact-${c.id}`}
@@ -438,6 +452,15 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
           seedFirmName={firm.name}
         />
       )}
+      <EditContactModal
+        open={!!editingContact}
+        onOpenChange={(o) => !o && setEditingContact(null)}
+        contact={editingContact}
+        onSaved={() => {
+          load();
+          onChanged();
+        }}
+      />
       {nextStepModals}
     </>
   );

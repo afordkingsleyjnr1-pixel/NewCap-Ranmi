@@ -6,6 +6,7 @@ import { encryptSecret, decryptSecret } from "@/lib/crypto";
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.settings.basic",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/userinfo.email",
 ];
@@ -66,6 +67,27 @@ export async function getAuthenticatedGoogleClient(userId: string) {
   }
 
   return client;
+}
+
+/**
+ * Fetches the user's default Gmail signature (set in Gmail's own Settings →
+ * General → Signature) so outbound sends via the API can append it —
+ * sending raw MIME through the API bypasses Gmail's web compose entirely,
+ * so the signature is never applied unless we explicitly fetch and append
+ * it ourselves. Returns null if unset, unreachable (e.g. an already-connected
+ * account that hasn't re-consented to the settings scope yet), or on any
+ * error — signature is a nice-to-have, never worth failing a send over.
+ */
+export async function getGmailSignature(userId: string): Promise<string | null> {
+  try {
+    const client = await getAuthenticatedGoogleClient(userId);
+    const gmail = google.gmail({ version: "v1", auth: client });
+    const res = await gmail.users.settings.sendAs.list({ userId: "me" });
+    const primary = res.data.sendAs?.find((s) => s.isDefault) ?? res.data.sendAs?.[0];
+    return primary?.signature || null;
+  } catch {
+    return null;
+  }
 }
 
 export function storeGoogleTokens(tokens: StoredTokens) {

@@ -26,7 +26,7 @@ export async function handleInboundReply(params: {
       sentAt: params.sentAt ?? new Date(),
     },
   });
-  await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date() } });
+  await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date(), hasUnreadReply: true } });
 
   if (thread.firmId) {
     await prisma.activityLog.create({

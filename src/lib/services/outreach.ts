@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { sendOutreachEmail } from "./email-send";
+import { sendOutreachEmail, type OutboundAttachment } from "./email-send";
 import { completePendingTask } from "./pipeline-tasks";
 import type { CrmStage } from "@/generated/prisma";
 
@@ -29,6 +29,7 @@ export async function sendOutreachToFirm(params: {
   adHocEmail?: string;
   subject: string;
   message: string;
+  attachments?: OutboundAttachment[];
   kind: "email" | "follow_up" | "term_sheet";
 }): Promise<{ threadId: string }> {
   const firm = await prisma.firm.findUniqueOrThrow({ where: { id: params.firmId } });
@@ -58,6 +59,7 @@ export async function sendOutreachToFirm(params: {
       to: recipientEmail,
       subject: params.subject,
       body: params.message,
+      attachments: params.attachments,
       existingProviderThreadId: thread?.providerThreadId,
     });
 
@@ -85,7 +87,14 @@ export async function sendOutreachToFirm(params: {
     }
 
     await prisma.emailMessage.create({
-      data: { threadId: thread.id, direction: "outbound", body: params.message, isFollowUp: params.kind === "follow_up" },
+      data: {
+        threadId: thread.id,
+        direction: "outbound",
+        body: params.message,
+        isFollowUp: params.kind === "follow_up",
+        providerMessageId: sendResult.providerMessageId ?? null,
+        attachments: params.attachments?.length ? params.attachments.map((a) => ({ filename: a.filename, mimeType: a.mimeType })) : undefined,
+      },
     });
 
     const actionLabel = params.kind === "follow_up" ? "Follow-up" : params.kind === "term_sheet" ? "Term Sheet / LOI" : "Email";

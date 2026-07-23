@@ -4,13 +4,29 @@ import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { TagPill } from "@/components/ui/badge";
+import { Loader2, Paperclip, X } from "lucide-react";
 
 interface Contact {
   id: string;
   name: string;
   email: string | null;
   rank: number;
+}
+
+interface PendingAttachment {
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "");
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export type ComposeKind = "email" | "follow_up" | "term_sheet";
@@ -42,8 +58,17 @@ export function ComposeEmailModal({
   const [adHocEmail, setAdHocEmail] = useState("");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [attaching, setAttaching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setAttachments([]);
+      setError(null);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (open && firmId) {
@@ -66,6 +91,25 @@ export function ComposeEmailModal({
     }
   }, [open, firmId, kind]);
 
+  async function handleFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setAttaching(true);
+    try {
+      const next: PendingAttachment[] = [];
+      for (const file of Array.from(files)) {
+        const contentBase64 = await fileToBase64(file);
+        next.push({ filename: file.name, mimeType: file.type || "application/octet-stream", contentBase64 });
+      }
+      setAttachments((prev) => [...prev, ...next]);
+    } finally {
+      setAttaching(false);
+    }
+  }
+
+  function removeAttachment(filename: string) {
+    setAttachments((prev) => prev.filter((a) => a.filename !== filename));
+  }
+
   async function submit() {
     setLoading(true);
     setError(null);
@@ -80,6 +124,7 @@ export function ComposeEmailModal({
           subject,
           message,
           kind,
+          attachments: attachments.length ? attachments : undefined,
         }),
       });
       const data = await res.json();
@@ -121,6 +166,28 @@ export function ComposeEmailModal({
           <Label>Message</Label>
           <Textarea rows={8} value={message} onChange={(e) => setMessage(e.target.value)} />
         </div>
+
+        {attachments.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {attachments.map((a) => (
+              <TagPill key={a.filename} className="flex items-center gap-1">
+                <Paperclip className="h-3 w-3" /> {a.filename}
+                <button onClick={() => removeAttachment(a.filename)} className="hover:text-status-red">
+                  <X className="h-3 w-3" />
+                </button>
+              </TagPill>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center justify-between">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-accent hover:underline">
+            {attaching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}
+            Attach files
+            <input type="file" multiple className="hidden" onChange={(e) => handleFiles(e.target.files)} />
+          </label>
+          <p className="text-[11px] text-text-secondary">Sent from your connected mailbox — your Gmail signature (if set) is added automatically.</p>
+        </div>
+
         {error && <p className="text-xs text-status-red">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

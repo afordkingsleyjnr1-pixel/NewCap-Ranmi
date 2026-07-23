@@ -3,17 +3,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { Input, Select } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
-import { Search } from "lucide-react";
+import { Search, Pencil } from "lucide-react";
 import { STAGE_LABELS, STAGE_COLORS, type CrmStageKey } from "@/lib/crm-stages";
 import { FirmDrawer } from "../firms/_components/firm-drawer";
 import { NextStepCell } from "../crm/_components/next-step-cell";
 import { useNextStepActions } from "../crm/_components/use-next-step-actions";
+import { EditContactModal, type EditableContact } from "../firms/_components/edit-contact-modal";
 
 interface ContactRow {
   id: string;
   name: string;
+  title: string | null;
   email: string | null;
   emailStatus: string;
+  alternateEmails: string[];
+  linkedinUrl: string | null;
   firm: {
     id: string;
     name: string;
@@ -29,6 +33,7 @@ export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [emailStatus, setEmailStatus] = useState("");
   const [openFirmId, setOpenFirmId] = useState<string | null>(null);
+  const [editingContact, setEditingContact] = useState<EditableContact | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,19 +81,20 @@ export default function ContactsPage() {
               <th>Firm</th>
               <th>Current Stage</th>
               <th>Next Step</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-text-secondary">
+                <td colSpan={6} className="py-8 text-center text-text-secondary">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && contacts.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-8 text-center text-text-secondary">
+                <td colSpan={6} className="py-8 text-center text-text-secondary">
                   No contacts yet.
                 </td>
               </tr>
@@ -113,6 +119,17 @@ export default function ContactsPage() {
                   <td onClick={(e) => e.stopPropagation()}>
                     <NextStepCell firm={c.firm} onAction={handleAction} />
                   </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() =>
+                        setEditingContact({ id: c.id, name: c.name, title: c.title, email: c.email, alternateEmails: c.alternateEmails ?? [], linkedinUrl: c.linkedinUrl })
+                      }
+                      className="rounded p-1 text-text-secondary hover:bg-page hover:text-accent"
+                      title="Edit contact"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
                 </tr>
               );
             })}
@@ -121,6 +138,7 @@ export default function ContactsPage() {
       </div>
 
       <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      <EditContactModal open={!!editingContact} onOpenChange={(o) => !o && setEditingContact(null)} contact={editingContact} onSaved={load} />
       {modals}
     </div>
   );
