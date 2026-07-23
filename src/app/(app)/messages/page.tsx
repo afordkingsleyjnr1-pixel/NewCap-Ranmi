@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
 import { formatDateTime, cn } from "@/lib/utils";
-import { Mail, Plus } from "lucide-react";
+import { Mail, Plus, RefreshCw } from "lucide-react";
 import { NewMessageModal } from "./_components/new-message-modal";
 
 interface Message {
@@ -34,16 +34,24 @@ export default function MessagesPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     const res = await fetch("/api/messages");
     const data = await res.json();
     setThreads(data.threads ?? []);
-    setLoading(false);
+    if (showSpinner) setLoading(false);
   }, []);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Replies pull in via /api/messages's sync (see reply-sync.ts) — poll in
+  // the background so a reply shows up while this page is open, not just on
+  // a manual refresh.
+  useEffect(() => {
+    const interval = setInterval(() => load(false), 20_000);
+    return () => clearInterval(interval);
   }, [load]);
 
   const active = threads.find((t) => t.id === openId) ?? threads[0] ?? null;
@@ -65,9 +73,14 @@ export default function MessagesPage() {
           <h1 className="text-xl font-semibold text-text-primary">Messages</h1>
           <p className="text-sm text-text-secondary">Every email thread across every firm, plus free-form messages sent from here</p>
         </div>
-        <Button size="sm" onClick={() => setComposeOpen(true)}>
-          <Plus className="h-3.5 w-3.5" /> New Message
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => load(true)} disabled={loading}>
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
+          </Button>
+          <Button size="sm" onClick={() => setComposeOpen(true)}>
+            <Plus className="h-3.5 w-3.5" /> New Message
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-[320px_1fr] gap-4">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Bell, BellRing } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { formatDateTime } from "@/lib/utils";
@@ -19,9 +19,37 @@ interface NotificationItem {
   relatedFirmId: string | null;
 }
 
+const POLL_INTERVAL_MS = 20_000;
+
+/** Short two-tone chime via Web Audio API — no audio asset needed. */
+function playChime() {
+  try {
+    const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioContextCtor();
+    const now = ctx.currentTime;
+    [880, 1174.66].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + i * 0.12);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.12 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.12 + 0.25);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.3);
+    });
+    setTimeout(() => ctx.close(), 600);
+  } catch {
+    // Web Audio unsupported/blocked — silently skip the sound.
+  }
+}
+
 export function Topbar({ userName = "Kweli" }: { userName?: string }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+  const seenIds = useRef<Set<string> | null>(null);
   const router = useRouter();
 
   async function logout() {
@@ -30,17 +58,54 @@ export function Topbar({ userName = "Kweli" }: { userName?: string }) {
     router.refresh();
   }
 
+  async function poll() {
+    try {
+      const res = await fetch("/api/notifications");
+      const data = await res.json();
+      const next: NotificationItem[] = data.notifications ?? [];
+
+      if (seenIds.current) {
+        const fresh = next.filter((n) => !n.isRead && !seenIds.current!.has(n.id));
+        if (fresh.length > 0) {
+          playChime();
+          if (permission === "granted") {
+            for (const n of fresh.slice(0, 3)) {
+              try {
+                new Notification("NewCap Ranmi", { body: n.body, tag: n.id });
+              } catch {
+                // Notification constructor can throw in some contexts (e.g. service worker required) — ignore.
+              }
+            }
+          }
+        }
+      }
+      seenIds.current = new Set(next.map((n) => n.id));
+      setNotifications(next);
+      setLoaded(true);
+    } catch {
+      setLoaded(true);
+    }
+  }
+
   useEffect(() => {
-    fetch("/api/notifications")
-      .then((r) => r.json())
-      .then((data) => {
-        setNotifications(data.notifications ?? []);
-        setLoaded(true);
-      })
-      .catch(() => setLoaded(true));
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setPermission(Notification.permission);
+    } else {
+      setPermission("unsupported");
+    }
+    poll();
+    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  async function requestNotificationPermission() {
+    if (!("Notification" in window)) return;
+    const result = await Notification.requestPermission();
+    setPermission(result);
+  }
 
   async function markRead(id: string) {
     await fetch(`/api/notifications/${id}`, { method: "PATCH", body: JSON.stringify({ isRead: true }) });
@@ -74,6 +139,19 @@ export function Topbar({ userName = "Kweli" }: { userName?: string }) {
               </button>
             )}
           </div>
+          {permission === "default" && (
+            <button
+              onClick={requestNotificationPermission}
+              className="flex w-full items-center gap-2 border-b border-border px-3 py-2 text-left text-[11px] text-accent hover:bg-page"
+            >
+              <BellRing className="h-3.5 w-3.5" /> Enable desktop notifications
+            </button>
+          )}
+          {permission === "denied" && (
+            <p className="border-b border-border px-3 py-2 text-[11px] text-text-secondary">
+              Desktop notifications are blocked — enable them in your browser's site settings to get alerted here.
+            </p>
+          )}
           <div className="max-h-80 overflow-y-auto">
             {!loaded && <div className="px-3 py-4 text-xs text-text-secondary">Loading…</div>}
             {loaded && notifications.length === 0 && (
