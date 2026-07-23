@@ -31,7 +31,9 @@ export function MyAccountTab() {
         <div className="rounded-md bg-status-green-bg px-3 py-2 text-sm text-status-green">Mailbox connected successfully.</div>
       )}
       {searchParams.get("error") && (
-        <div className="rounded-md bg-status-red-bg px-3 py-2 text-sm text-status-red">Connection failed. Check your OAuth configuration.</div>
+        <div className="rounded-md bg-status-red-bg px-3 py-2 text-sm text-status-red">
+          Connection failed{searchParams.get("reason") ? `: ${searchParams.get("reason")}` : ". Check your OAuth configuration."}
+        </div>
       )}
 
       <Card>

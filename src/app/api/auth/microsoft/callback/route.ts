@@ -33,7 +33,12 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.redirect(new URL("/settings?connected=outlook", req.url));
-  } catch {
-    return NextResponse.redirect(new URL("/settings?error=oauth", req.url));
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("Outlook OAuth callback failed:", e);
+    const url = new URL("/settings", req.url);
+    url.searchParams.set("error", "oauth");
+    url.searchParams.set("reason", message);
+    return NextResponse.redirect(url);
   }
 }

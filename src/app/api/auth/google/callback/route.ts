@@ -35,7 +35,16 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.redirect(new URL("/settings?connected=gmail", req.url));
-  } catch {
-    return NextResponse.redirect(new URL("/settings?error=oauth", req.url));
+  } catch (e) {
+    // Swallowing this used to leave the user with zero explanation for why
+    // "Allow" didn't result in a connected mailbox — log server-side and
+    // pass a real reason through so Settings can show it instead of a
+    // generic "check your OAuth configuration."
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("Gmail OAuth callback failed:", e);
+    const url = new URL("/settings", req.url);
+    url.searchParams.set("error", "oauth");
+    url.searchParams.set("reason", message);
+    return NextResponse.redirect(url);
   }
 }
