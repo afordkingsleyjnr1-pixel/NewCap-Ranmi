@@ -13,12 +13,13 @@ export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const settings = await getAppSettings();
+  const hunterConfigured = await isHunterConfigured();
   return NextResponse.json({
     followUpThresholdDays: settings.followUpThresholdDays,
-    hunterKeyConfigured: !!settings.hunterApiKeyEncrypted || isHunterConfigured(),
+    hunterKeyConfigured: hunterConfigured,
     integrations: {
       anthropic: isAnthropicConfigured(),
-      hunter: isHunterConfigured(),
+      hunter: hunterConfigured,
       google: isGoogleConfigured(),
       microsoft: isMicrosoftConfigured(),
     },

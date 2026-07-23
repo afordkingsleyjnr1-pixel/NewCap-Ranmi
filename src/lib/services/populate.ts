@@ -89,7 +89,7 @@ export async function runPopulate(params: {
     briefs = [params.criteria!];
   } else {
     const allFirms = await prisma.firm.findMany({ where: { deletedAt: null } });
-    briefs = allFirms.map((f) => ({
+    briefs = allFirms.map((f: { strategies: unknown; focusAreas: unknown; hqLocation: string | null; aumValue: unknown; targetMarkets: string[] }) => ({
       strategies: f.strategies as Record<string, string[]>,
       focusAreas: f.focusAreas as Record<string, string[]>,
       geography: f.hqLocation,

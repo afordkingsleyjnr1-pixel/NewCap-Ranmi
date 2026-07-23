@@ -32,7 +32,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   // research_sources is polymorphic (entity_type + entity_id, no real FK — see
   // schema comment), so it's fetched separately for the firm plus every one
   // of its contacts rather than via a Prisma relation.
-  const contactIds = firm.contacts.map((c) => c.id);
+  const contactIds = firm.contacts.map((c: { id: string }) => c.id);
   const researchSources = await prisma.researchSource.findMany({
     where: {
       OR: [

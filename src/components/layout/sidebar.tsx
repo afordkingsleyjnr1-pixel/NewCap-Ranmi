@@ -10,6 +10,7 @@ import {
   ListChecks,
   BarChart3,
   Settings,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/firms", label: "Firms Database", icon: Building2 },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/crm", label: "CRM Pipeline", icon: KanbanSquare },
+  { href: "/messages", label: "Messages", icon: Mail },
   { href: "/projects", label: "Projects", icon: ListChecks },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },

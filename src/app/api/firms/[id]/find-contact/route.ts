@@ -36,7 +36,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       });
     }
 
-    if (isHunterConfigured()) {
+    if (await isHunterConfigured()) {
       const [first, ...rest] = c.name.split(" ");
       const last = rest.join(" ") || first;
       try {
