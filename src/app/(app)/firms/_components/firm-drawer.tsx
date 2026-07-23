@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Pill, TagPill } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
-import { Label, Select, Textarea } from "@/components/ui/input";
+import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES, nextStepForFirm } from "@/lib/crm-stages";
 import { formatDate, formatDateTime, cn } from "@/lib/utils";
-import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search, Pencil } from "lucide-react";
+import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search, Pencil, Plus } from "lucide-react";
 import { PopulateModal } from "./populate-modal";
 import { EditContactModal, type EditableContact } from "./edit-contact-modal";
+import { AddContactModal } from "./add-contact-modal";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 
 interface Props {
@@ -28,6 +29,9 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   const [populateOpen, setPopulateOpen] = useState(false);
   const [findContactWarnings, setFindContactWarnings] = useState<string[]>([]);
   const [editingContact, setEditingContact] = useState<EditableContact | null>(null);
+  const [addContactOpen, setAddContactOpen] = useState(false);
+  const [domainDraft, setDomainDraft] = useState("");
+  const [savingDomain, setSavingDomain] = useState(false);
 
   const load = useCallback(async () => {
     if (!firmId) return;
@@ -41,6 +45,10 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setDomainDraft(data?.firm?.domain ?? "");
+  }, [data?.firm?.domain]);
 
   useEffect(() => {
     if (firmId) {
@@ -107,6 +115,19 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
     onChanged();
     onClose();
     setBusy(null);
+  }
+
+  async function saveDomain() {
+    const cleaned = domainDraft.trim().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    if (!cleaned) return;
+    setSavingDomain(true);
+    await fetch(`/api/firms/${firmId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ domain: cleaned, domainResolutionStatus: "resolved" }),
+    });
+    await load();
+    onChanged();
+    setSavingDomain(false);
   }
 
   async function clearMandateOverride() {
@@ -189,6 +210,26 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                 </Button>
               </div>
             </div>
+
+            {firm.domainResolutionStatus !== "resolved" && (
+              <div className="space-y-2 rounded-md bg-status-amber-bg p-3">
+                <p className="text-xs font-medium text-status-amber">
+                  Domain research {firm.domainResolutionStatus === "ambiguous" ? "found multiple possible matches" : "couldn't confidently resolve"} for
+                  this firm — Find Contact and Find Email need a confirmed domain to run. Enter it below if you know it.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={domainDraft}
+                    onChange={(e) => setDomainDraft(e.target.value)}
+                    placeholder="example.com"
+                    className="max-w-xs"
+                  />
+                  <Button size="sm" onClick={saveDomain} disabled={savingDomain || !domainDraft.trim()}>
+                    {savingDomain && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Confirm Domain
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {nextStep && (
               <div className="flex items-center justify-between rounded-md bg-page px-3 py-2.5">
@@ -330,9 +371,14 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
 
               <TabsContent value="contacts">
                 <div className="space-y-3">
-                  <Button size="sm" variant="outline" onClick={findContact} disabled={busy === "findContact"}>
-                    <UserSearch className="h-3.5 w-3.5" /> {busy === "findContact" ? "Researching…" : "Find Contact"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={findContact} disabled={busy === "findContact"}>
+                      <UserSearch className="h-3.5 w-3.5" /> {busy === "findContact" ? "Researching…" : "Find Contact"}
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setAddContactOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" /> Add Contact
+                    </Button>
+                  </div>
                   {findContactWarnings.length > 0 && (
                     <div className="rounded-md bg-status-amber-bg p-2.5">
                       {findContactWarnings.map((w, i) => (
@@ -457,6 +503,15 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
         onOpenChange={(o) => !o && setEditingContact(null)}
         contact={editingContact}
         onSaved={() => {
+          load();
+          onChanged();
+        }}
+      />
+      <AddContactModal
+        open={addContactOpen}
+        onOpenChange={setAddContactOpen}
+        firmId={firmId}
+        onAdded={() => {
           load();
           onChanged();
         }}
