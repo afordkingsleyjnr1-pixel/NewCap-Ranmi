@@ -80,6 +80,7 @@ export default function ProjectDetailPage() {
   const [addTaskOpen, setAddTaskOpen] = useState(false);
   const [assignMemberOpen, setAssignMemberOpen] = useState(false);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [canManageSettings, setCanManageSettings] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,6 +96,13 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((d) => setCanManageSettings(!!d.isAccountOwner || (d.permissions ?? []).includes("manage_settings")))
+      .catch(() => setCanManageSettings(false));
+  }, []);
 
   const { handleAction, modals } = useNextStepActions(load);
 
@@ -322,9 +330,16 @@ export default function ProjectDetailPage() {
 
         <TabsContent value="tasks">
           <div className="space-y-3 pt-4">
-            <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)} disabled={project.firms.length === 0}>
-              <Plus className="h-3.5 w-3.5" /> Add Task
-            </Button>
+            {canManageSettings ? (
+              <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)} disabled={project.firms.length === 0}>
+                <Plus className="h-3.5 w-3.5" /> Add Task
+              </Button>
+            ) : (
+              <p className="text-xs text-text-secondary">
+                Only workspace admins can create tasks. Head to the Actions tab to send emails, schedule meetings, log notes, or update CRM stages
+                directly.
+              </p>
+            )}
             <div className="overflow-x-auto rounded-lg border border-border bg-surface">
               <table className="data-table">
                 <thead>
@@ -383,7 +398,8 @@ export default function ProjectDetailPage() {
           <ActionsTab
             projectId={project.id}
             firms={project.firms.map((f) => f.firm)}
-            tasks={project.tasks}
+            members={project.members.map((m) => ({ id: m.userId, name: m.user.name }))}
+            handleAction={handleAction}
             onDone={load}
           />
         </TabsContent>

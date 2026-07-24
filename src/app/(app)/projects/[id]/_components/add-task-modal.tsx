@@ -18,19 +18,10 @@ interface MemberOption {
   name: string;
 }
 
-// Kinds pulled straight from the existing CRM task set (Section: Project
-// Tasks) — "Send Email" etc. create the same system pending-action task the
-// Next Step engine creates automatically, so completing it still drives the
-// firm's CRM stage. "Custom" is a plain ad hoc task; notes live in their own
-// field below regardless of type, not as a task type of their own.
-const TASK_KINDS = [
-  { value: "send_email", label: "Send Email" },
-  { value: "send_follow_up", label: "Send Follow-up" },
-  { value: "schedule_meeting", label: "Schedule Meeting" },
-  { value: "send_term_sheet", label: "Send Term Sheet / LOI" },
-  { value: "custom", label: "Custom Task" },
-] as const;
-
+// Admin-only, plain to-do tasks — every actual CRM action (Send Email,
+// Schedule Meeting, Change Stage, etc.) now lives in the project's Actions
+// tab instead, open to any project member. Add Task is just for tracking
+// work that doesn't fit one of those, e.g. "Review updated fund docs".
 export function AddTaskModal({
   open,
   onOpenChange,
@@ -47,8 +38,7 @@ export function AddTaskModal({
   onAdded: () => void;
 }) {
   const [firmIds, setFirmIds] = useState<Set<string>>(new Set());
-  const [kind, setKind] = useState<(typeof TASK_KINDS)[number]["value"]>("send_email");
-  const [customTitle, setCustomTitle] = useState("");
+  const [title, setTitle] = useState("");
   const [contactId, setContactId] = useState("");
   const [priority, setPriority] = useState<"low" | "medium" | "high">("medium");
   const [notes, setNotes] = useState("");
@@ -60,8 +50,7 @@ export function AddTaskModal({
   useEffect(() => {
     if (open) {
       setFirmIds(new Set(firms[0] ? [firms[0].id] : []));
-      setKind("send_email");
-      setCustomTitle("");
+      setTitle("");
       setContactId("");
       setPriority("medium");
       setNotes("");
@@ -72,7 +61,6 @@ export function AddTaskModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const needsCustomTitle = kind === "custom";
   const singleFirm = firmIds.size === 1 ? firms.find((f) => firmIds.has(f.id)) : null;
   const allSelected = firms.length > 0 && firmIds.size === firms.length;
 
@@ -91,25 +79,23 @@ export function AddTaskModal({
   }
 
   async function submit() {
-    if (firmIds.size === 0) return;
+    if (firmIds.size === 0 || !title.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = {
-        firmIds: Array.from(firmIds),
-        contactId: contactId || undefined,
-        projectId,
-        priority,
-        description: notes || undefined,
-        dueDate: dueDate || undefined,
-        ownerId: ownerId || undefined,
-      };
-      if (needsCustomTitle) {
-        body.title = customTitle;
-      } else {
-        body.kind = kind;
-      }
-      const res = await fetch("/api/tasks", { method: "POST", body: JSON.stringify(body) });
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        body: JSON.stringify({
+          firmIds: Array.from(firmIds),
+          contactId: contactId || undefined,
+          projectId,
+          title: title.trim(),
+          priority,
+          description: notes || undefined,
+          dueDate: dueDate || undefined,
+          ownerId: ownerId || undefined,
+        }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to add task");
@@ -127,6 +113,11 @@ export function AddTaskModal({
     <Modal open={open} onOpenChange={onOpenChange} title="Add Task" widthClassName="max-w-md">
       <div className="space-y-3">
         <div>
+          <Label>Task Name</Label>
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Review updated fund documents" />
+        </div>
+
+        <div>
           <div className="mb-1 flex items-center justify-between">
             <Label>Related Firms</Label>
             <button onClick={toggleAll} className="text-xs text-accent hover:underline">
@@ -142,23 +133,6 @@ export function AddTaskModal({
             ))}
           </div>
         </div>
-
-        <div>
-          <Label>Task Type / Action</Label>
-          <Select value={kind} onChange={(e) => setKind(e.target.value as typeof kind)}>
-            {TASK_KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
-              </option>
-            ))}
-          </Select>
-        </div>
-        {needsCustomTitle && (
-          <div>
-            <Label>Task Name</Label>
-            <Input value={customTitle} onChange={(e) => setCustomTitle(e.target.value)} placeholder="Task title" />
-          </div>
-        )}
 
         {singleFirm && singleFirm.contacts.length > 0 && (
           <div>
@@ -208,7 +182,7 @@ export function AddTaskModal({
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={submit} disabled={loading || firmIds.size === 0 || (needsCustomTitle && !customTitle.trim())}>
+          <Button onClick={submit} disabled={loading || firmIds.size === 0 || !title.trim()}>
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add Task{firmIds.size > 1 ? ` (${firmIds.size} firms)` : ""}
           </Button>
         </div>
