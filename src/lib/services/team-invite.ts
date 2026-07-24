@@ -9,13 +9,13 @@ import { sendOutreachEmail } from "./email-send";
  * teammates never received an email regardless of whether the admin had a
  * mailbox connected.
  */
-export async function sendInviteEmail(inviterId: string, inviterName: string, toEmail: string, inviteLink: string): Promise<boolean> {
+export async function sendInviteEmail(inviterId: string, inviterName: string, toEmail: string, inviteUrl: string): Promise<boolean> {
   try {
     await sendOutreachEmail({
       userId: inviterId,
       to: toEmail,
       subject: "You've been invited to join NewCap Ranmi",
-      body: `Hi,\n\nYou've been invited to join the NewCap Ranmi platform. Create your account to get started:\n\n${process.env.APP_URL ?? ""}${inviteLink}\n\nBest,\n${inviterName}`,
+      body: `Hi,\n\nYou've been invited to join the NewCap Ranmi platform. Create your account to get started:\n\n${inviteUrl}\n\nBest,\n${inviterName}`,
     });
     return true;
   } catch {

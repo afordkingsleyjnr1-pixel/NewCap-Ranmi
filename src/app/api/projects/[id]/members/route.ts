@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 import { VIEWER_ROLE_NAME } from "@/lib/permissions";
 import { sendOutreachEmail } from "@/lib/services/email-send";
+import { getBaseUrl } from "@/lib/request-url";
 
 // Section: Projects Module step 4 — Assign Team Members. Enter an email:
 // if the person already has a platform account, they're added to the
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         userId: user!.id,
         to: targetUser.email,
         subject: `You've been invited to join "${project.name}" on NewCap`,
-        body: `Hi,\n\nYou've been added to the project "${project.name}" on the NewCap platform. Create your account to get started:\n\n${process.env.APP_URL ?? ""}${inviteLink}\n\nBest,\n${user!.name}`,
+        body: `Hi,\n\nYou've been added to the project "${project.name}" on the NewCap platform. Create your account to get started:\n\n${getBaseUrl(req)}${inviteLink}\n\nBest,\n${user!.name}`,
       });
       emailSent = true;
     } catch {

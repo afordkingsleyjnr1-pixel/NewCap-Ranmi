@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { signSession, SESSION_COOKIE } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
-  const { email, password } = await req.json();
+  const { email, password, rememberMe } = await req.json();
   const user = await prisma.user.findUnique({ where: { email } });
 
   if (!user || !user.passwordHash || user.status !== "active") {
@@ -15,6 +15,15 @@ export async function POST(req: NextRequest) {
 
   const token = signSession(user.id);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", maxAge: 60 * 60 * 24 * 30, path: "/" });
+  // Remember Me controls the browser cookie's own lifetime — unchecked, it's
+  // a session cookie that clears on browser close; the signed JWT itself is
+  // always valid for 30 days either way (see signSession).
+  res.cookies.set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    ...(rememberMe === false ? {} : { maxAge: 60 * 60 * 24 * 30 }),
+  });
   return res;
 }

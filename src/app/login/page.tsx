@@ -2,12 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -16,7 +19,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    const res = await fetch("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password, rememberMe }) });
     if (res.ok) {
       router.push("/dashboard");
       router.refresh();
@@ -44,7 +47,16 @@ export default function LoginPage() {
           </div>
           <div>
             <Label>Password</Label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} required />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} className="h-3.5 w-3.5 rounded border-border" />
+              Remember me
+            </label>
+            <Link href="/forgot-password" className="text-xs text-accent hover:underline">
+              Forgot password?
+            </Link>
           </div>
           {error && <p className="text-xs text-status-red">{error}</p>}
           <Button type="submit" className="w-full" disabled={loading}>
