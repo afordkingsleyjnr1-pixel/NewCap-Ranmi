@@ -467,7 +467,12 @@ model Task {
   owner          User?        @relation("TaskOwner", fields: [ownerId], references: [id])
   createdAt      DateTime     @default(now()) @map("created_at")
   completedAt    DateTime?    @map("completed_at")
+  /// Groups the per-firm task rows created together from one multi-firm
+  /// "Add Task" submission, so the Project → Actions tab can offer a single
+  /// "Send Email" button that executes across the whole batch at once.
+  batchId        String?      @map("batch_id")
 
+  @@index([batchId])
   @@map("tasks")
 }
 
