@@ -24,6 +24,10 @@ export function TeamRolesTab() {
   const [reassignTo, setReassignTo] = useState("");
   const [inviteResult, setInviteResult] = useState<{ emailSent: boolean; inviteLink: string } | null>(null);
   const [resendResult, setResendResult] = useState<{ emailSent: boolean; inviteLink: string } | null>(null);
+  const [editUser, setEditUser] = useState<any | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRoleId, setEditRoleId] = useState("");
 
   async function load() {
     const [u, r] = await Promise.all([fetch("/api/users").then((x) => x.json()), fetch("/api/roles").then((x) => x.json())]);
@@ -78,6 +82,39 @@ export function TeamRolesTab() {
     });
     setReassignPrompt(null);
     setReassignTo("");
+    load();
+  }
+
+  function openEdit(u: any) {
+    setEditUser(u);
+    setEditName(u.name);
+    setEditEmail(u.email);
+    setEditRoleId(u.roleId);
+  }
+
+  async function saveEdit() {
+    if (!editUser) return;
+    const res = await fetch(`/api/users/${editUser.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "edit", name: editName, email: editEmail, roleId: editRoleId }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error ?? "Failed to save changes");
+      return;
+    }
+    setEditUser(null);
+    load();
+  }
+
+  async function deleteUser(u: any) {
+    if (!confirm(`Delete ${u.name}? This cannot be undone.`)) return;
+    const res = await fetch(`/api/users/${u.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error ?? "Failed to delete");
+      return;
+    }
     load();
   }
 
@@ -145,6 +182,14 @@ export function TeamRolesTab() {
                 {u.status === "active" && !u.isAccountOwner && (
                   <Button size="sm" variant="ghost" onClick={() => deactivate(u.id)}>
                     Deactivate
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onClick={() => openEdit(u)}>
+                  Edit
+                </Button>
+                {!u.isAccountOwner && u.status !== "active" && (
+                  <Button size="sm" variant="ghost" onClick={() => deleteUser(u)}>
+                    Delete
                   </Button>
                 )}
               </div>
@@ -242,6 +287,40 @@ export function TeamRolesTab() {
             <Button onClick={createRole} disabled={!newRoleName}>
               Create Role
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)} title="Edit Team Member">
+        <div className="space-y-3">
+          <div>
+            <Label>Name</Label>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+          </div>
+          <div>
+            <Label>Email</Label>
+            <Input
+              value={editEmail}
+              onChange={(e) => setEditEmail(e.target.value)}
+              disabled={editUser?.status !== "pending_invite"}
+              title={editUser?.status !== "pending_invite" ? "Email can only be changed while the invite is still pending" : undefined}
+            />
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select value={editRoleId} onChange={(e) => setEditRoleId(e.target.value)} disabled={editUser?.isAccountOwner}>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setEditUser(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit}>Save</Button>
           </div>
         </div>
       </Modal>

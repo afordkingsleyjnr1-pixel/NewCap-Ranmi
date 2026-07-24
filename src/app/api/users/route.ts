@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 import { sendInviteEmail } from "@/lib/services/team-invite";
+import { getBaseUrl } from "@/lib/request-url";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
   });
 
   const inviteLink = `/accept-invite?token=${newUser.id}`;
-  const emailSent = await sendInviteEmail(user!.id, user!.name, newUser.email, inviteLink);
+  const emailSent = await sendInviteEmail(user!.id, user!.name, newUser.email, `${getBaseUrl(req)}${inviteLink}`);
 
   return NextResponse.json({ user: newUser, inviteLink, emailSent });
 }

@@ -178,6 +178,8 @@ model User {
   invitedUsers    User[]     @relation("Invites")
   invitedAt       DateTime?  @map("invited_at")
   joinedAt        DateTime?  @map("joined_at")
+  passwordResetToken     String?   @unique @map("password_reset_token")
+  passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
   emailConnection   EmailConnection?
   ownedCrmStages    CrmStageRow[]     @relation("StageOwner")

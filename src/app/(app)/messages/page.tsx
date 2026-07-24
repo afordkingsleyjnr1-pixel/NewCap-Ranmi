@@ -198,9 +198,10 @@ export default function MessagesPage() {
     });
   }
 
+  // Name only — no email addresses shown anywhere in the Messages UI.
   function recipientLabel(t: Thread): string {
-    if (t.contact) return `${t.contact.name}${t.contact.email ? ` <${t.contact.email}>` : ""}`;
-    if (t.adHocRecipientName || t.adHocRecipientEmail) return `${t.adHocRecipientName ?? ""} ${t.adHocRecipientEmail ? `<${t.adHocRecipientEmail}>` : ""}`.trim();
+    if (t.contact) return t.contact.name;
+    if (t.adHocRecipientName) return t.adHocRecipientName;
     return "Unknown recipient";
   }
 
