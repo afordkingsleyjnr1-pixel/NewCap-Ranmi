@@ -60,7 +60,7 @@ export function CreateProjectModal({ open, onOpenChange, onCreated }: { open: bo
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Create Project" widthClassName="max-w-lg">
+    <Modal open={open} onOpenChange={onOpenChange} title="Create Project" widthClassName="max-w-xl">
       <div className="space-y-3">
         <div>
           <Label>Project Name</Label>

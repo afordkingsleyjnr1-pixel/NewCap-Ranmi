@@ -110,7 +110,7 @@ export function AddTaskModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Add Task" widthClassName="max-w-md">
+    <Modal open={open} onOpenChange={onOpenChange} title="Add Task" widthClassName="max-w-xl">
       <div className="space-y-3">
         <div>
           <Label>Task Name</Label>

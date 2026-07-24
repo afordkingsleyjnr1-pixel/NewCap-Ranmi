@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { TaxonomyPicker } from "../../../firms/_components/taxonomy-picker";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+
+const PAGE_SIZE = 50;
 
 interface FirmOption {
   id: string;
@@ -24,8 +26,9 @@ type Mode = "search" | "taxonomy";
 // children under a selected parent — or, if a parent is selected with no
 // children checked yet, any presence under that parent at all. Strategy
 // and Focus Area selections are independent filters that both narrow the
-// result (AND across categories, OR within a category) — same semantics
-// as the Firms Database grid filters.
+// result when both are set (AND across categories, OR within a category,
+// so filtering by strategy alone, focus area alone, or both all work) —
+// same semantics as the Firms Database grid filters.
 function matchesTaxonomy(firmTaxonomy: Record<string, string[]>, selection: Record<string, string[]>): boolean {
   const parents = Object.keys(selection);
   if (parents.length === 0) return true;
@@ -57,6 +60,7 @@ export function AddFirmsModal({
   const [strategies, setStrategies] = useState<Record<string, string[]>>({});
   const [focusAreas, setFocusAreas] = useState<Record<string, string[]>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,20 +84,49 @@ export function AddFirmsModal({
       setSearch("");
       setStrategies({});
       setFocusAreas({});
+      setPage(1);
       setError(null);
     }
   }, [open]);
 
-  const notInProject = firms.filter((f) => !existingFirmIds.includes(f.id));
-  const available =
+  const notInProject = useMemo(() => firms.filter((f) => !existingFirmIds.includes(f.id)), [firms, existingFirmIds]);
+
+  const hasTaxonomySelection = Object.keys(strategies).length > 0 || Object.keys(focusAreas).length > 0;
+  const hasSearchTerm = search.trim().length > 0;
+
+  // Nothing shows until the user actually searches or picks a taxonomy
+  // filter — with a large firm database, listing everything by default
+  // is exactly the "crowded, not user friendly" problem being fixed here.
+  const matching =
     mode === "search"
-      ? notInProject.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
-      : notInProject.filter((f) => matchesTaxonomy(f.strategies, strategies) && matchesTaxonomy(f.focusAreas, focusAreas));
+      ? hasSearchTerm
+        ? notInProject.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()))
+        : []
+      : hasTaxonomySelection
+        ? notInProject.filter((f) => matchesTaxonomy(f.strategies, strategies) && matchesTaxonomy(f.focusAreas, focusAreas))
+        : [];
+
+  useEffect(() => setPage(1), [search, strategies, focusAreas, mode]);
+
+  const pageCount = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+  const paged = matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const rangeStart = matching.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, matching.length);
+  const allMatchingSelected = matching.length > 0 && matching.every((f) => selected.has(f.id));
 
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllMatching() {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allMatchingSelected) matching.forEach((f) => next.delete(f.id));
+      else matching.forEach((f) => next.add(f.id));
       return next;
     });
   }
@@ -131,7 +164,7 @@ export function AddFirmsModal({
             onClick={() => setMode("taxonomy")}
             className={`flex-1 rounded px-3 py-2 ${mode === "taxonomy" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
           >
-            By Strategy & Focus Area
+            By Strategy and/or Focus Area
           </button>
         </div>
 
@@ -153,9 +186,51 @@ export function AddFirmsModal({
           </div>
         )}
 
+        <div className="flex items-center justify-between text-xs text-text-secondary">
+          <div className="flex items-center gap-3">
+            <span>{selected.size} selected</span>
+            {matching.length > 0 && (
+              <button onClick={toggleAllMatching} className="text-accent hover:underline">
+                {allMatchingSelected ? "Clear all matching" : `Select all ${matching.length} matching`}
+              </button>
+            )}
+          </div>
+          {matching.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span>
+                {rangeStart}–{rangeEnd} of {matching.length}
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="rounded p-1 hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={page >= pageCount}
+                className="rounded p-1 hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+
         <div className="max-h-96 overflow-y-auto rounded-md border border-border">
-          {available.length === 0 && <p className="p-4 text-sm text-text-secondary">No matching firms.</p>}
-          {available.map((f) => (
+          {matching.length === 0 && (
+            <p className="p-4 text-sm text-text-secondary">
+              {mode === "search"
+                ? hasSearchTerm
+                  ? "No matching firms."
+                  : "Type a firm name to search your database."
+                : hasTaxonomySelection
+                  ? "No matching firms."
+                  : "Pick a strategy and/or focus area above to see matching firms."}
+            </p>
+          )}
+          {paged.map((f) => (
             <label key={f.id} className="flex cursor-pointer items-start gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-page">
               <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggle(f.id)} />
               <div className="min-w-0 flex-1">
