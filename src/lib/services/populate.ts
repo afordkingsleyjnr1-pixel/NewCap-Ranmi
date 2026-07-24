@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { runWebResearch, extractJson, isAnthropicConfigured } from "@/lib/anthropic";
+import { formatAum } from "@/lib/utils";
 import { findDuplicate } from "./dedupe";
 import { runFirmResearchPipeline } from "./firm-pipeline";
 import type { PopulateMode } from "@/generated/prisma";
@@ -48,7 +49,9 @@ function briefToPrompt(brief: SearchBrief): string {
   if (brief.geography) lines.push(`Geography / target markets: ${brief.geography}`);
   if (brief.targetMarkets?.length) lines.push(`Target markets: ${brief.targetMarkets.join(", ")}`);
   if (brief.aumBand?.min || brief.aumBand?.max) {
-    lines.push(`AUM band: $${brief.aumBand.min ?? 0} - $${brief.aumBand.max ?? "unbounded"}`);
+    lines.push(
+      `AUM band: $${brief.aumBand.min ?? 0} - $${brief.aumBand.max ?? "unbounded"}. This is a hard requirement, not a preference — only return firms whose current AUM you can find falls inside this exact range. Do not include a firm whose AUM is outside this band even if it otherwise matches well.`
+    );
   }
   return lines.join("\n");
 }
@@ -62,6 +65,36 @@ async function searchCandidates(brief: SearchBrief, desiredCount: number, exclud
   });
   const parsed = extractJson<{ candidates?: string[] }>(raw);
   return Array.isArray(parsed?.candidates) ? parsed.candidates.filter((c) => typeof c === "string") : [];
+}
+
+// by_criteria is the one mode with an explicit, user-set AUM band — the
+// candidate search prompt only ever treats it as a hint (the model can and
+// does surface firms outside it), so the actual researched AUM is checked
+// here and anything outside the band is discarded rather than added. Other
+// modes (Similar to a Firm, Across Entire Database) derive their own
+// AUM range from an existing firm rather than a user-set band, so this
+// filter intentionally doesn't apply to them.
+function outsideAumBand(aumValue: number | null, band: { min?: number; max?: number } | null | undefined): boolean {
+  if (!band || aumValue == null) return false;
+  if (band.min != null && aumValue < band.min) return true;
+  if (band.max != null && aumValue > band.max) return true;
+  return false;
+}
+
+// Cleans up a firm created moments ago by runFirmResearchPipeline once it's
+// determined to be outside the requested AUM band — mirrors the deletion
+// order used by the Recently Deleted → Delete Permanently purge route.
+async function discardFirm(firmId: string): Promise<void> {
+  const contactIds = (await prisma.contact.findMany({ where: { firmId }, select: { id: true } })).map((c: { id: string }) => c.id);
+  await prisma.$transaction([
+    prisma.researchSource.deleteMany({
+      where: { OR: [{ entityType: "firm", entityId: firmId }, { entityType: "contact", entityId: { in: contactIds } }] },
+    }),
+    prisma.task.deleteMany({ where: { firmId } }),
+    prisma.contact.deleteMany({ where: { firmId } }),
+    prisma.crmStageRow.deleteMany({ where: { firmId } }),
+    prisma.firm.delete({ where: { id: firmId } }),
+  ]);
 }
 
 export interface PopulateResult {
@@ -186,6 +219,15 @@ export async function runPopulate(params: {
         similarToFirmId: params.mode === "similar_to_firm" ? params.seedFirmId : null,
         onProgress: emit,
       });
+
+      if (params.mode === "by_criteria" && outsideAumBand(outcome.aumValue, params.criteria?.aumBand)) {
+        await discardFirm(outcome.firmId);
+        researchWarnings.push(
+          `${name}: skipped — AUM ${formatAum(outcome.aumValue)} is outside the requested $${params.criteria?.aumBand?.min ? formatAum(params.criteria.aumBand.min) : "0"}–${params.criteria?.aumBand?.max ? formatAum(params.criteria.aumBand.max) : "unbounded"} band.`
+        );
+        continue;
+      }
+
       firmsAdded++;
       addedFirms.push({ id: outcome.firmId, name: outcome.name });
       if (outcome.researchWarning) researchWarnings.push(`${name}: ${outcome.researchWarning}`);

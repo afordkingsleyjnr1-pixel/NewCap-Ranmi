@@ -12,6 +12,7 @@ export interface PipelineOutcome {
   domainResolutionStatus: "resolved" | "ambiguous" | "unresolved";
   classificationStatus: "classified" | "needs_review";
   primaryContactFound: boolean;
+  aumValue: number | null;
   /** Non-null if an AI/Hunter call failed partway through — the firm is still
    * created with whatever succeeded, but the caller can surface this so a
    * billing/rate-limit/API error doesn't look like a silent no-op. */
@@ -73,6 +74,7 @@ export async function runFirmResearchPipeline(params: {
       domainResolutionStatus: "unresolved",
       classificationStatus: "needs_review",
       primaryContactFound: false,
+      aumValue: null,
       researchWarning: "ANTHROPIC_API_KEY is not set — added without research.",
     };
   }
@@ -236,6 +238,7 @@ export async function runFirmResearchPipeline(params: {
     domainResolutionStatus: core.domainStatus,
     classificationStatus: core.classificationStatus,
     primaryContactFound,
+    aumValue: core.aumValue,
     researchWarning,
   };
 }
