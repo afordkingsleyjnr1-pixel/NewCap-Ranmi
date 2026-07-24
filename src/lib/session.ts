@@ -94,8 +94,8 @@ async function bootstrapDefaultAccount(): Promise<SessionUser> {
   try {
     owner = await prisma.user.create({
       data: {
-        email: "kweli@adcapitalpartners.com",
-        name: "Kweli",
+        email: "sydney@adcapital-partners.com",
+        name: "Sydney",
         roleId: adminRole.id,
         isAccountOwner: true,
         status: "active",
@@ -104,7 +104,7 @@ async function bootstrapDefaultAccount(): Promise<SessionUser> {
     });
   } catch {
     // Another concurrent request already created it — read it back instead.
-    owner = await prisma.user.findUniqueOrThrow({ where: { email: "kweli@adcapitalpartners.com" } });
+    owner = await prisma.user.findUniqueOrThrow({ where: { email: "sydney@adcapital-partners.com" } });
   }
 
   return { id: owner.id, name: owner.name, email: owner.email, roleId: owner.roleId, isAccountOwner: owner.isAccountOwner };

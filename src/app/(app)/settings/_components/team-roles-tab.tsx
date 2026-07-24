@@ -22,6 +22,8 @@ export function TeamRolesTab() {
   const [newRoleScope, setNewRoleScope] = useState<"all_firms" | "owned_firms_only">("all_firms");
   const [reassignPrompt, setReassignPrompt] = useState<{ userId: string; count: number } | null>(null);
   const [reassignTo, setReassignTo] = useState("");
+  const [inviteResult, setInviteResult] = useState<{ emailSent: boolean; inviteLink: string } | null>(null);
+  const [resendResult, setResendResult] = useState<{ emailSent: boolean; inviteLink: string } | null>(null);
 
   async function load() {
     const [u, r] = await Promise.all([fetch("/api/users").then((x) => x.json()), fetch("/api/roles").then((x) => x.json())]);
@@ -35,15 +37,23 @@ export function TeamRolesTab() {
   }, []);
 
   async function sendInvite() {
-    await fetch("/api/users", { method: "POST", body: JSON.stringify({ email: inviteEmail, name: inviteName, roleId: inviteRoleId }) });
+    const res = await fetch("/api/users", { method: "POST", body: JSON.stringify({ email: inviteEmail, name: inviteName, roleId: inviteRoleId }) });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.error ?? "Failed to send invite");
+      return;
+    }
     setInviteEmail("");
     setInviteName("");
     setInviteOpen(false);
+    setInviteResult({ emailSent: data.emailSent, inviteLink: data.inviteLink });
     load();
   }
 
   async function resend(id: string) {
-    await fetch(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify({ action: "resend_invite" }) });
+    const res = await fetch(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify({ action: "resend_invite" }) });
+    const data = await res.json();
+    setResendResult({ emailSent: data.emailSent, inviteLink: data.inviteLink });
   }
   async function revoke(id: string) {
     await fetch(`/api/users/${id}`, { method: "PATCH", body: JSON.stringify({ action: "revoke_invite" }) });
@@ -256,6 +266,49 @@ export function TeamRolesTab() {
             <Button onClick={confirmReassignAndDeactivate} disabled={!reassignTo}>
               Reassign & Deactivate
             </Button>
+          </div>
+        </div>
+      </Modal>
+      <Modal open={!!inviteResult} onOpenChange={(o) => !o && setInviteResult(null)} title="Invite Sent">
+        <div className="space-y-3">
+          {inviteResult?.emailSent ? (
+            <p className="text-sm text-text-primary">An invite email was sent from your connected mailbox.</p>
+          ) : (
+            <>
+              <p className="text-sm text-status-amber">
+                No email was sent — connect your mailbox in Settings → My Account so invites deliver automatically. Share this link with them
+                directly in the meantime:
+              </p>
+              <div className="rounded-md bg-page px-3 py-2 text-xs text-text-primary break-all">
+                {typeof window !== "undefined" ? window.location.origin : ""}
+                {inviteResult?.inviteLink}
+              </div>
+            </>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={() => setInviteResult(null)}>Done</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!resendResult} onOpenChange={(o) => !o && setResendResult(null)} title="Invite Resent">
+        <div className="space-y-3">
+          {resendResult?.emailSent ? (
+            <p className="text-sm text-text-primary">The invite email was resent from your connected mailbox.</p>
+          ) : (
+            <>
+              <p className="text-sm text-status-amber">
+                No email was sent — connect your mailbox in Settings → My Account so invites deliver automatically. Share this link with them
+                directly in the meantime:
+              </p>
+              <div className="rounded-md bg-page px-3 py-2 text-xs text-text-primary break-all">
+                {typeof window !== "undefined" ? window.location.origin : ""}
+                {resendResult?.inviteLink}
+              </div>
+            </>
+          )}
+          <div className="flex justify-end">
+            <Button onClick={() => setResendResult(null)}>Done</Button>
           </div>
         </div>
       </Modal>

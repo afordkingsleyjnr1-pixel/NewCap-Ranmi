@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 import { createNotification } from "@/lib/services/notifications";
+import { sendInviteEmail } from "@/lib/services/team-invite";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -38,7 +39,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   if (body.action === "resend_invite") {
-    return NextResponse.json({ ok: true, inviteLink: `/accept-invite?token=${id}` });
+    const inviteLink = `/accept-invite?token=${id}`;
+    const emailSent = await sendInviteEmail(user!.id, user!.name, target.email, inviteLink);
+    return NextResponse.json({ ok: true, inviteLink, emailSent });
   }
 
   if (body.action === "revoke_invite") {

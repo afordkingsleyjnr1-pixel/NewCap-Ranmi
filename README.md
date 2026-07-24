@@ -24,7 +24,7 @@ npx prisma db seed
 npm run dev
 ```
 
-Seeded login: `kweli@adcapitalpartners.com` / `changeme123`
+Seeded login: `sydney@adcapital-partners.com` / `changeme123`
 
 ## Configuring integrations
 
