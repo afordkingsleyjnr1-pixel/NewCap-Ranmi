@@ -188,6 +188,7 @@ model User {
   deletedFirms      Firm[]            @relation("FirmDeletedBy")
   ownedProjects     Project[]         @relation("ProjectOwner")
   projectMemberships ProjectMember[]
+  messageDrafts     MessageDraft[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -369,6 +370,7 @@ model EmailThread {
   isFreeForm           Boolean      @default(false) @map("is_free_form")
   hasUnreadReply       Boolean      @default(false) @map("has_unread_reply")
   followUpSentAt       DateTime?    @map("follow_up_sent_at")
+  deletedAt            DateTime?    @map("deleted_at")
   createdAt            DateTime     @default(now()) @map("created_at")
   lastActivityAt       DateTime     @default(now()) @map("last_activity_at")
 
@@ -385,11 +387,36 @@ model EmailMessage {
   body              String            @db.Text
   isFollowUp        Boolean           @default(false) @map("is_follow_up")
   providerMessageId String?           @map("provider_message_id")
+  ccEmails          String[]          @default([]) @map("cc_emails")
+  bccEmails         String[]          @default([]) @map("bcc_emails")
   attachments       Json?
   sentAt            DateTime          @default(now()) @map("sent_at")
 
   @@index([threadId, providerMessageId])
   @@map("email_messages")
+}
+
+// Messages module — Drafts folder. Saved but not yet sent; sending a draft
+// creates the real EmailThread/EmailMessage via the same send pipeline as
+// everything else, then removes the draft row.
+model MessageDraft {
+  id            String   @id @default(uuid())
+  createdById   String   @map("created_by_id")
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  firmId        String?  @map("firm_id")
+  contactId     String?  @map("contact_id")
+  replyToThreadId String? @map("reply_to_thread_id")
+  toName        String?  @map("to_name")
+  toEmail       String?  @map("to_email")
+  ccEmails      String[] @default([]) @map("cc_emails")
+  bccEmails     String[] @default([]) @map("bcc_emails")
+  subject       String   @default("")
+  body          String   @default("") @db.Text
+  attachments   Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("message_drafts")
 }
 
 model Meeting {

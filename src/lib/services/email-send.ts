@@ -20,6 +20,8 @@ function textToHtml(body: string): string {
 function buildRawMessage(params: {
   to: string;
   from: string;
+  cc?: string[];
+  bcc?: string[];
   subject: string;
   body: string;
   signatureHtml?: string | null;
@@ -28,6 +30,8 @@ function buildRawMessage(params: {
   references?: string;
 }): string {
   const headers = [`To: ${params.to}`, `From: ${params.from}`, `Subject: ${params.subject}`, "MIME-Version: 1.0"];
+  if (params.cc?.length) headers.push(`Cc: ${params.cc.join(", ")}`);
+  if (params.bcc?.length) headers.push(`Bcc: ${params.bcc.join(", ")}`);
   if (params.inReplyTo) headers.push(`In-Reply-To: ${params.inReplyTo}`, `References: ${params.references ?? params.inReplyTo}`);
 
   const hasAttachments = !!params.attachments?.length;
@@ -89,6 +93,8 @@ function buildRawMessage(params: {
 export async function sendOutreachEmail(params: {
   userId: string;
   to: string;
+  cc?: string[];
+  bcc?: string[];
   subject: string;
   body: string;
   attachments?: OutboundAttachment[];
@@ -104,6 +110,8 @@ export async function sendOutreachEmail(params: {
     const raw = buildRawMessage({
       to: params.to,
       from: connection.connectedEmail,
+      cc: params.cc,
+      bcc: params.bcc,
       subject: params.subject,
       body: params.body,
       signatureHtml,
@@ -128,10 +136,15 @@ export async function sendOutreachEmail(params: {
       contentBytes: a.contentBase64,
     }));
 
+    const ccRecipients = params.cc?.length ? { ccRecipients: params.cc.map((addr) => ({ emailAddress: { address: addr } })) } : {};
+    const bccRecipients = params.bcc?.length ? { bccRecipients: params.bcc.map((addr) => ({ emailAddress: { address: addr } })) } : {};
+
     if (params.existingProviderThreadId) {
       await client.api(`/me/messages/${params.existingProviderThreadId}/reply`).post({
         comment: params.body,
-        ...(graphAttachments?.length ? { message: { attachments: graphAttachments } } : {}),
+        ...(graphAttachments?.length || params.cc?.length || params.bcc?.length
+          ? { message: { ...(graphAttachments?.length ? { attachments: graphAttachments } : {}), ...ccRecipients, ...bccRecipients } }
+          : {}),
       });
       return { providerThreadId: params.existingProviderThreadId };
     }
@@ -139,6 +152,8 @@ export async function sendOutreachEmail(params: {
       subject: params.subject,
       body: { contentType: "Text", content: params.body },
       toRecipients: [{ emailAddress: { address: params.to } }],
+      ...ccRecipients,
+      ...bccRecipients,
       ...(graphAttachments?.length ? { attachments: graphAttachments } : {}),
     });
     await client.api(`/me/messages/${draft.id}/send`).post({});
