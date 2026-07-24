@@ -152,8 +152,32 @@ export function ActionsTab({
   return (
     <div className="space-y-4 pt-4">
       <div>
+        <h3 className="mb-1 text-sm font-semibold text-text-primary">1. Choose an action</h3>
+        <p className="mb-2 text-xs text-text-secondary">
+          {hasSelection ? `Applies to ${selectedFirmIds.size} firm${selectedFirmIds.size === 1 ? "" : "s"}.` : "Select firms below first."}
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {ACTIONS.map((a) => {
+            const Icon = a.icon;
+            return (
+              <button
+                key={a.key}
+                onClick={a.onClick}
+                disabled={!a.enabled}
+                title={!a.enabled ? a.disabledReason ?? "Select at least one firm first" : undefined}
+                className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-4 text-center text-xs font-medium text-text-primary hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface"
+              >
+                <Icon className="h-5 w-5 text-accent" />
+                {a.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text-primary">1. Select firms</h3>
+          <h3 className="text-sm font-semibold text-text-primary">2. Select firms</h3>
           <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
             <Users className="h-3.5 w-3.5" /> Select Firm(s)
           </Button>
@@ -204,30 +228,6 @@ export function ActionsTab({
         initialSelected={selectedFirmIds}
         onConfirm={setSelectedFirmIds}
       />
-
-      <div>
-        <h3 className="mb-1 text-sm font-semibold text-text-primary">2. Choose an action</h3>
-        <p className="mb-2 text-xs text-text-secondary">
-          {hasSelection ? `Applies to ${selectedFirmIds.size} firm${selectedFirmIds.size === 1 ? "" : "s"}.` : "Select at least one firm above first."}
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {ACTIONS.map((a) => {
-            const Icon = a.icon;
-            return (
-              <button
-                key={a.key}
-                onClick={a.onClick}
-                disabled={!a.enabled}
-                title={!a.enabled ? a.disabledReason ?? "Select at least one firm first" : undefined}
-                className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-4 text-center text-xs font-medium text-text-primary hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface"
-              >
-                <Icon className="h-5 w-5 text-accent" />
-                {a.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
 
       <BulkEmailModal
         open={bulkEmailOpen}
