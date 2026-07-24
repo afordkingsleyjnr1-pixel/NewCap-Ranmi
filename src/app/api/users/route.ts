@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
+import { sendInviteEmail } from "@/lib/services/team-invite";
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -32,7 +33,8 @@ export async function POST(req: NextRequest) {
     data: { email, name, roleId, status: "pending_invite", invitedById: user!.id, invitedAt: new Date() },
   });
 
-  // Email delivery of the invite link is sent via the platform's transactional
-  // email provider once configured; the accept link is /accept-invite?token=<user.id>.
-  return NextResponse.json({ user: newUser, inviteLink: `/accept-invite?token=${newUser.id}` });
+  const inviteLink = `/accept-invite?token=${newUser.id}`;
+  const emailSent = await sendInviteEmail(user!.id, user!.name, newUser.email, inviteLink);
+
+  return NextResponse.json({ user: newUser, inviteLink, emailSent });
 }

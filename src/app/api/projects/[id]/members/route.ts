@@ -29,6 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let targetUser = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
   let invited = false;
   let inviteLink: string | null = null;
+  let emailSent = false;
 
   if (!targetUser) {
     const viewerRole = await prisma.role.findFirst({ where: { name: VIEWER_ROLE_NAME } });
@@ -54,6 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         subject: `You've been invited to join "${project.name}" on NewCap`,
         body: `Hi,\n\nYou've been added to the project "${project.name}" on the NewCap platform. Create your account to get started:\n\n${process.env.APP_URL ?? ""}${inviteLink}\n\nBest,\n${user!.name}`,
       });
+      emailSent = true;
     } catch {
       // No connected mailbox, or send failed — the invite link is still
       // returned in the response so it can be shared manually.
@@ -67,5 +69,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     include: { user: { select: { id: true, name: true, email: true, status: true } } },
   });
 
-  return NextResponse.json({ member, invited, inviteLink });
+  return NextResponse.json({ member, invited, inviteLink, emailSent });
 }

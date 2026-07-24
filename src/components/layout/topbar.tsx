@@ -45,7 +45,7 @@ function playChime() {
   }
 }
 
-export function Topbar({ userName = "Kweli" }: { userName?: string }) {
+export function Topbar({ userName = "Sydney" }: { userName?: string }) {
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");

@@ -23,7 +23,7 @@ export function AssignMemberModal({
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ invited: boolean; inviteLink: string | null } | null>(null);
+  const [result, setResult] = useState<{ invited: boolean; inviteLink: string | null; emailSent: boolean } | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -42,7 +42,7 @@ export function AssignMemberModal({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to add member");
       if (data.invited) {
-        setResult({ invited: true, inviteLink: data.inviteLink });
+        setResult({ invited: true, inviteLink: data.inviteLink, emailSent: data.emailSent });
       } else {
         onAdded();
         onOpenChange(false);
@@ -59,11 +59,18 @@ export function AssignMemberModal({
     <Modal open={open} onOpenChange={onOpenChange} title="Assign User" widthClassName="max-w-sm">
       {result ? (
         <div className="space-y-3">
-          <p className="text-sm text-text-primary">
-            No platform account existed for that email — one was created and they've been added to this project. An invite email was sent if you have a
-            connected mailbox; otherwise share this link directly:
-          </p>
-          <div className="rounded-md bg-page px-3 py-2 text-xs text-text-primary">{result.inviteLink}</div>
+          <p className="text-sm text-text-primary">No platform account existed for that email — one was created and they've been added to this project.</p>
+          {result.emailSent ? (
+            <p className="text-sm text-status-green">An invite email was sent from your connected mailbox.</p>
+          ) : (
+            <>
+              <p className="text-sm text-status-amber">
+                No email was sent — connect your mailbox in Settings → My Account so invites deliver automatically. Share this link with them directly in
+                the meantime:
+              </p>
+              <div className="rounded-md bg-page px-3 py-2 text-xs text-text-primary break-all">{result.inviteLink}</div>
+            </>
+          )}
           <div className="flex justify-end">
             <Button onClick={() => onOpenChange(false)}>Done</Button>
           </div>
