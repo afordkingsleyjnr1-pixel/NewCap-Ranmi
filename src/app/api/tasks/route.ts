@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
@@ -52,6 +53,7 @@ export async function POST(req: NextRequest) {
   if (firmIds.length === 0) return NextResponse.json({ error: "At least one firm is required" }, { status: 400 });
 
   const priority = ["low", "medium", "high"].includes(body.priority) ? body.priority : "medium";
+  const batchId = firmIds.length > 1 ? randomUUID() : null;
 
   const tasks = [];
   for (const firmId of firmIds) {
@@ -75,6 +77,7 @@ export async function POST(req: NextRequest) {
         dueDate: body.dueDate ? new Date(body.dueDate) : null,
         isFromTemplate,
         ownerId: body.ownerId ?? user!.id,
+        batchId,
       },
     });
     tasks.push(task);

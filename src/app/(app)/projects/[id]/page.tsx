@@ -16,6 +16,7 @@ import { AddFirmsModal } from "./_components/add-firms-modal";
 import { AddTaskModal } from "./_components/add-task-modal";
 import { AssignMemberModal } from "./_components/assign-member-modal";
 import { BulkEmailModal } from "./_components/bulk-email-modal";
+import { ActionsTab } from "./_components/actions-tab";
 
 interface ProjectFirmRow {
   firmId: string;
@@ -39,6 +40,7 @@ interface TaskRow {
   priority: "low" | "medium" | "high";
   dueDate: string | null;
   isFromTemplate: boolean;
+  batchId: string | null;
   owner: { id: string; name: string } | null;
   contact: { id: string; name: string } | null;
   firm: { id: string; name: string };
@@ -196,6 +198,7 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="firms">Firms ({project.firms.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
+          <TabsTrigger value="actions">Actions</TabsTrigger>
           <TabsTrigger value="members">Members ({project.members.length})</TabsTrigger>
         </TabsList>
 
@@ -374,6 +377,15 @@ export default function ProjectDetailPage() {
               </table>
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="actions">
+          <ActionsTab
+            projectId={project.id}
+            firms={project.firms.map((f) => f.firm)}
+            tasks={project.tasks}
+            onDone={load}
+          />
         </TabsContent>
 
         <TabsContent value="members">

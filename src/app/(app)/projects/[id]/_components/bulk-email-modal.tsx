@@ -24,15 +24,17 @@ export function BulkEmailModal({
   onOpenChange,
   projectId,
   targets,
+  initialKind,
   onSent,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   projectId: string;
   targets: Target[];
+  initialKind?: Kind;
   onSent: () => void;
 }) {
-  const [kind, setKind] = useState<Kind>("email");
+  const [kind, setKind] = useState<Kind>(initialKind ?? "email");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,13 +45,14 @@ export function BulkEmailModal({
 
   useEffect(() => {
     if (open) {
-      setKind("email");
+      setKind(initialKind ?? "email");
       setSubject("");
       setMessage("");
       setError(null);
       setResult(null);
     }
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialKind]);
 
   const missingEmail = targets.filter((t) => !t.contactId);
 
