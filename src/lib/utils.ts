@@ -31,6 +31,28 @@ export function formatDate(d: Date | string | null | undefined): string {
   return date.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 
+/**
+ * Gmail-style message-list timestamp: relative elapsed time (no "ago") for
+ * anything within the last 24 hours, then a short date once it's older.
+ * Full date+time is reserved for the opened thread — see formatDateTime.
+ */
+export function formatRelativeListTime(d: Date | string | null | undefined): string {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
+
+  if (diffSec < 5) return "Just now";
+  if (diffSec < 60) return `${diffSec} sec`;
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin} min${diffMin === 1 ? "" : "s"}`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} hr${diffHr === 1 ? "" : "s"}`;
+
+  return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+}
+
 export function formatDateTime(d: Date | string | null | undefined): string {
   if (!d) return "—";
   const date = typeof d === "string" ? new Date(d) : d;
