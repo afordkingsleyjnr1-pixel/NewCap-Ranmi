@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, Label, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/drawer";
-import { Mail, RefreshCw, FileText, CalendarClock, StickyNote, ArrowRightCircle, UserCog, Loader2 } from "lucide-react";
+import { Mail, RefreshCw, FileText, CalendarClock, StickyNote, ArrowRightCircle, UserCog, Loader2, Users } from "lucide-react";
 import { BulkEmailModal } from "./bulk-email-modal";
+import { SelectFirmsModal } from "./select-firms-modal";
 import { CRM_STAGES, STAGE_LABELS, type CrmStageKey } from "@/lib/crm-stages";
 import type { StageAction } from "@/lib/crm-stages";
 
@@ -45,6 +45,7 @@ export function ActionsTab({
 }) {
   const [selectedFirmIds, setSelectedFirmIds] = useState<Set<string>>(new Set());
   const [contactOverrides, setContactOverrides] = useState<Record<string, string>>({});
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [bulkEmailKind, setBulkEmailKind] = useState<EmailKind>("email");
@@ -151,36 +152,58 @@ export function ActionsTab({
   return (
     <div className="space-y-4 pt-4">
       <div>
-        <h3 className="mb-1 text-sm font-semibold text-text-primary">1. Select firms</h3>
-        <p className="mb-2 text-xs text-text-secondary">
-          Pick who the action applies to. When a firm has more than one contact, choose which one to use.
-        </p>
-        <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-          {firms.length === 0 && <p className="p-2 text-xs text-text-secondary">No firms in this project yet.</p>}
-          {firms.map((f) => (
-            <div key={f.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-page">
-              <label className="flex flex-1 items-center gap-2 text-sm text-text-primary">
-                <Checkbox checked={selectedFirmIds.has(f.id)} onCheckedChange={() => toggleFirm(f.id)} />
-                {f.name}
-                {!f.contacts.some((c) => c.email) && <Pill color="amber">no email on file</Pill>}
-              </label>
-              {selectedFirmIds.has(f.id) && f.contacts.length > 1 && (
-                <Select
-                  className="w-48"
-                  value={contactOverrides[f.id] ?? f.contacts.find((c) => c.email)?.id ?? ""}
-                  onChange={(e) => setContactOverrides((prev) => ({ ...prev, [f.id]: e.target.value }))}
-                >
-                  {f.contacts.map((c) => (
-                    <option key={c.id} value={c.id} disabled={!c.email}>
-                      {c.name} {c.email ? "" : "(no email)"}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </div>
-          ))}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-text-primary">1. Select firms</h3>
+          <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
+            <Users className="h-3.5 w-3.5" /> Select Firm(s)
+          </Button>
         </div>
+        <p className="mb-2 mt-1 text-xs text-text-secondary">
+          {hasSelection
+            ? "When a firm has more than one contact, choose which one to use below."
+            : "Nothing selected yet — click Select Firm(s) to search and choose who the action applies to."}
+        </p>
+        {hasSelection && (
+          <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+            {selectedFirms.map((f) => (
+              <div key={f.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-page">
+                <span className="flex flex-1 items-center gap-2 text-sm text-text-primary">
+                  {f.name}
+                  {!f.contacts.some((c) => c.email) && <Pill color="amber">no email on file</Pill>}
+                </span>
+                {f.contacts.length > 1 && (
+                  <Select
+                    className="w-48"
+                    value={contactOverrides[f.id] ?? f.contacts.find((c) => c.email)?.id ?? ""}
+                    onChange={(e) => setContactOverrides((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                  >
+                    {f.contacts.map((c) => (
+                      <option key={c.id} value={c.id} disabled={!c.email}>
+                        {c.name} {c.email ? "" : "(no email)"}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                <button
+                  onClick={() => toggleFirm(f.id)}
+                  className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red"
+                  title="Remove from selection"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      <SelectFirmsModal
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        firms={firms}
+        initialSelected={selectedFirmIds}
+        onConfirm={setSelectedFirmIds}
+      />
 
       <div>
         <h3 className="mb-1 text-sm font-semibold text-text-primary">2. Choose an action</h3>
@@ -218,7 +241,7 @@ export function ActionsTab({
         }}
       />
 
-      <Modal open={noteOpen} onOpenChange={setNoteOpen} title="Add Note" widthClassName="max-w-sm">
+      <Modal open={noteOpen} onOpenChange={setNoteOpen} title="Add Note" widthClassName="max-w-md">
         <div className="space-y-3">
           <p className="text-xs text-text-secondary">Logs the same note to {selectedFirms.length} firm(s)' Activity tab.</p>
           <div>
@@ -236,7 +259,7 @@ export function ActionsTab({
         </div>
       </Modal>
 
-      <Modal open={stageOpen} onOpenChange={setStageOpen} title="Change CRM Stage" widthClassName="max-w-sm">
+      <Modal open={stageOpen} onOpenChange={setStageOpen} title="Change CRM Stage" widthClassName="max-w-md">
         <div className="space-y-3">
           <p className="text-xs text-text-secondary">Moves {selectedFirms.length} firm(s) to the selected stage.</p>
           <div>
@@ -260,7 +283,7 @@ export function ActionsTab({
         </div>
       </Modal>
 
-      <Modal open={ownerOpen} onOpenChange={setOwnerOpen} title="Assign Owner" widthClassName="max-w-sm">
+      <Modal open={ownerOpen} onOpenChange={setOwnerOpen} title="Assign Owner" widthClassName="max-w-md">
         <div className="space-y-3">
           <p className="text-xs text-text-secondary">Sets the owner for {selectedFirms.length} firm(s).</p>
           <div>

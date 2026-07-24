@@ -56,7 +56,7 @@ export function AssignMemberModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Assign User" widthClassName="max-w-sm">
+    <Modal open={open} onOpenChange={onOpenChange} title="Assign User" widthClassName="max-w-md">
       {result ? (
         <div className="space-y-3">
           <p className="text-sm text-text-primary">No platform account existed for that email — one was created and they've been added to this project.</p>

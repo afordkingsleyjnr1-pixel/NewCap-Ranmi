@@ -76,7 +76,7 @@ export function BulkEmailModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title={`Send Bulk Email (${targets.length} firm${targets.length === 1 ? "" : "s"})`} widthClassName="max-w-lg">
+    <Modal open={open} onOpenChange={onOpenChange} title={`Send Bulk Email (${targets.length} firm${targets.length === 1 ? "" : "s"})`} widthClassName="max-w-2xl">
       {result ? (
         <div className="space-y-3">
           <div className="flex gap-2">
