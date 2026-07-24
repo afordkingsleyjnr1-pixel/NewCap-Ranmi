@@ -2,5 +2,13 @@
   "crons": [
     { "path": "/api/cron/follow-up-check", "schedule": "0 13 * * *" },
     { "path": "/api/cron/renew-watches", "schedule": "0 6 * * *" }
-  ]
+  ],
+  "functions": {
+    "src/app/api/firms/route.ts": { "maxDuration": 300 },
+    "src/app/api/populate/route.ts": { "maxDuration": 300 },
+    "src/app/api/settings/reclassify-all/route.ts": { "maxDuration": 300 },
+    "src/app/api/firms/[id]/find-contact/route.ts": { "maxDuration": 60 },
+    "src/app/api/firms/[id]/reclassify/route.ts": { "maxDuration": 60 },
+    "src/app/api/contacts/[id]/find-email/route.ts": { "maxDuration": 60 }
+  }
 }

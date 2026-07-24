@@ -39,6 +39,14 @@ export const RESEARCH_MODEL = "claude-haiku-4-5-20251001";
  * Below Anthropic's minimum cacheable block size (~2048 tokens for Haiku),
  * the block is simply not cached — no error, just no savings.
  */
+function isRetryableStatus(status: unknown): boolean {
+  return typeof status === "number" && (status === 429 || status === 408 || status === 409 || status >= 500);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function runWebResearch(params: {
   system: string;
   user: string;
@@ -55,25 +63,40 @@ export async function runWebResearch(params: {
     systemBlocks.push({ type: "text", text: params.cacheableSystemExtra, cache_control: { type: "ephemeral" } });
   }
 
-  const response = await anthropic.messages.create({
-    model: RESEARCH_MODEL,
-    max_tokens: params.maxTokens ?? 4096,
-    system: systemBlocks,
-    tools: [
-      {
-        type: "web_search_20250305",
-        name: "web_search",
-        max_uses: params.maxUses ?? 4,
-      } as unknown as Anthropic.Messages.Tool,
-    ],
-    messages: [{ role: "user", content: params.user }],
-  });
+  // Research calls hit Anthropic's web_search tool, which can transiently
+  // 429/529 under load — one retry with a short backoff turns a would-be
+  // "came back with nothing" into a normal result instead of surfacing
+  // every transient blip as a hard failure.
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleep(1500);
+    try {
+      const response = await anthropic.messages.create({
+        model: RESEARCH_MODEL,
+        max_tokens: params.maxTokens ?? 4096,
+        system: systemBlocks,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: params.maxUses ?? 4,
+          } as unknown as Anthropic.Messages.Tool,
+        ],
+        messages: [{ role: "user", content: params.user }],
+      });
 
-  return response.content
-    .filter((block): block is Anthropic.Messages.TextBlock => block.type === "text")
-    .map((block) => block.text)
-    .join("\n")
-    .trim();
+      return response.content
+        .filter((block): block is Anthropic.Messages.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
+    } catch (e) {
+      lastError = e;
+      const status = e && typeof e === "object" && "status" in e ? (e as { status: unknown }).status : undefined;
+      if (!isRetryableStatus(status)) throw e;
+    }
+  }
+  throw lastError;
 }
 
 /** Extracts the first {...} JSON object from a possibly prose-wrapped LLM response. */
