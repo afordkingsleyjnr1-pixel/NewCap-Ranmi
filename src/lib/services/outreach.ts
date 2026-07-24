@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { sendOutreachEmail, type OutboundAttachment } from "./email-send";
+import { attachmentsForStorage } from "./attachment-store";
 import { completePendingTask } from "./pipeline-tasks";
 import type { CrmStage } from "@/generated/prisma";
 
@@ -93,7 +94,7 @@ export async function sendOutreachToFirm(params: {
         body: params.message,
         isFollowUp: params.kind === "follow_up",
         providerMessageId: sendResult.providerMessageId ?? null,
-        attachments: params.attachments?.length ? params.attachments.map((a) => ({ filename: a.filename, mimeType: a.mimeType })) : undefined,
+        attachments: attachmentsForStorage(params.attachments),
       },
     });
 

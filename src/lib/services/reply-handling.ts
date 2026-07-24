@@ -13,6 +13,8 @@ export async function handleInboundReply(params: {
   notifyUserId: string;
   providerMessageId?: string;
   sentAt?: Date;
+  ccEmails?: string[];
+  attachments?: Array<{ filename: string; mimeType: string; contentBase64?: string }>;
 }) {
   const thread = await prisma.emailThread.findUniqueOrThrow({ where: { id: params.threadId } });
 
@@ -23,6 +25,8 @@ export async function handleInboundReply(params: {
       body: params.body,
       isFollowUp: false,
       providerMessageId: params.providerMessageId ?? null,
+      ccEmails: params.ccEmails ?? [],
+      attachments: params.attachments?.length ? params.attachments : undefined,
       sentAt: params.sentAt ?? new Date(),
     },
   });
@@ -52,4 +56,70 @@ export async function handleInboundReply(params: {
     relatedFirmId: thread.firmId ?? null,
     body: `New reply on "${thread.subject}"`,
   });
+}
+
+/**
+ * A genuinely new inbound email from a known contact that isn't a reply to
+ * any thread the platform already tracks — e.g. the contact emailed the
+ * user's connected mailbox directly from their own inbox rather than
+ * replying to something sent from the platform. Creates the thread the
+ * message belongs in, then goes through the same notification path as an
+ * ordinary reply.
+ */
+export async function ingestNewInboundThread(params: {
+  subject: string;
+  body: string;
+  fromEmail: string;
+  fromName: string | null;
+  contactId: string | null;
+  firmId: string | null;
+  notifyUserId: string;
+  providerThreadId: string;
+  providerMessageId: string;
+  sentAt?: Date;
+  ccEmails?: string[];
+  attachments?: Array<{ filename: string; mimeType: string; contentBase64?: string }>;
+}): Promise<string> {
+  const thread = await prisma.emailThread.create({
+    data: {
+      firmId: params.firmId,
+      contactId: params.contactId,
+      adHocRecipientName: params.contactId ? null : params.fromName,
+      adHocRecipientEmail: params.contactId ? null : params.fromEmail,
+      subject: params.subject,
+      providerThreadId: params.providerThreadId,
+      status: "replied",
+      isFreeForm: true,
+      hasUnreadReply: true,
+      lastActivityAt: params.sentAt ?? new Date(),
+    },
+  });
+
+  await prisma.emailMessage.create({
+    data: {
+      threadId: thread.id,
+      direction: "inbound",
+      body: params.body,
+      isFollowUp: false,
+      providerMessageId: params.providerMessageId,
+      ccEmails: params.ccEmails ?? [],
+      attachments: params.attachments?.length ? params.attachments : undefined,
+      sentAt: params.sentAt ?? new Date(),
+    },
+  });
+
+  if (params.firmId) {
+    await prisma.activityLog.create({
+      data: { firmId: params.firmId, contactId: params.contactId, type: "email_received", body: "New email received", createdById: null },
+    });
+  }
+
+  await createNotification({
+    userId: params.notifyUserId,
+    type: "reply_received",
+    relatedFirmId: params.firmId,
+    body: `New email from ${params.fromName ?? params.fromEmail}: "${params.subject}"`,
+  });
+
+  return thread.id;
 }
