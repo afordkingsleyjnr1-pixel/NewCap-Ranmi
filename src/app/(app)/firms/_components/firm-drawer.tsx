@@ -469,6 +469,9 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
                         <span className={t.status === "done" ? "text-text-secondary line-through" : "text-text-primary"}>{t.title}</span>
                       </label>
                       <div className="flex items-center gap-2">
+                        {t.priority && t.priority !== "medium" && (
+                          <Pill color={t.priority === "high" ? "red" : "gray"}>{t.priority}</Pill>
+                        )}
                         <span className="text-xs text-text-secondary">{t.dueDate ? formatDate(t.dueDate) : "no due date"}</span>
                         <button
                           onClick={() => deleteTask(t.id, t.title)}

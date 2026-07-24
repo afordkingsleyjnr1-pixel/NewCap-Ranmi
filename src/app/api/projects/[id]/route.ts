@@ -29,7 +29,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         },
       },
       tasks: {
-        include: { owner: { select: { id: true, name: true } }, firm: { select: { id: true, name: true } } },
+        include: {
+          owner: { select: { id: true, name: true } },
+          firm: { select: { id: true, name: true } },
+          contact: { select: { id: true, name: true } },
+        },
         orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       },
     },

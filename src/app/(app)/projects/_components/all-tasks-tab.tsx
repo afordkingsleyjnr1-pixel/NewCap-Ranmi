@@ -11,8 +11,10 @@ interface TaskRow {
   title: string;
   dueDate: string | null;
   status: "open" | "done";
+  priority: "low" | "medium" | "high";
   isFromTemplate: boolean;
   firm: { id: string; name: string };
+  contact: { id: string; name: string } | null;
   owner: { name: string } | null;
   project: { id: string; name: string } | null;
 }
@@ -57,7 +59,9 @@ export function AllTasksTab() {
               <th className="w-8"></th>
               <th>Task</th>
               <th>Firm</th>
+              <th>Contact</th>
               <th>Project</th>
+              <th>Priority</th>
               <th>Due Date</th>
               <th>Owner</th>
               <th></th>
@@ -66,14 +70,14 @@ export function AllTasksTab() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-text-secondary">
+                <td colSpan={9} className="py-8 text-center text-text-secondary">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && tasks.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-text-secondary">
+                <td colSpan={9} className="py-8 text-center text-text-secondary">
                   No open tasks. Checklists auto-generate when a firm reaches Term Sheet / LOI.
                 </td>
               </tr>
@@ -90,7 +94,11 @@ export function AllTasksTab() {
                     {t.isFromTemplate && <Pill color="gray" className="ml-2">Checklist</Pill>}
                   </td>
                   <td className="text-accent">{t.firm.name}</td>
+                  <td className="text-text-secondary">{t.contact?.name ?? "—"}</td>
                   <td className="text-text-secondary">{t.project?.name ?? "—"}</td>
+                  <td>
+                    <Pill color={t.priority === "high" ? "red" : t.priority === "low" ? "gray" : "amber"}>{t.priority}</Pill>
+                  </td>
                   <td>{overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : t.dueDate ? formatDate(t.dueDate) : "—"}</td>
                   <td className="text-text-secondary">{t.owner?.name ?? "—"}</td>
                   <td>
