@@ -49,6 +49,20 @@ export async function POST(req: NextRequest) {
   }
   const body = await req.json();
 
+  // Project tasks are now plain admin-created to-dos — every actual CRM
+  // action (send email, schedule meeting, change stage, etc.) is done
+  // directly from a project's Actions tab instead, open to any user with
+  // send_outreach/edit_firms. Firm-level quick tasks (no projectId) keep
+  // the broader manage_tasks gate.
+  if (body.projectId) {
+    try {
+      await requirePermission(user, "manage_settings");
+    } catch (e) {
+      if (e instanceof ForbiddenError) return NextResponse.json({ error: "Only workspace admins can create project tasks." }, { status: 403 });
+      throw e;
+    }
+  }
+
   const firmIds: string[] = Array.isArray(body.firmIds) && body.firmIds.length ? body.firmIds : body.firmId ? [body.firmId] : [];
   if (firmIds.length === 0) return NextResponse.json({ error: "At least one firm is required" }, { status: 400 });
 

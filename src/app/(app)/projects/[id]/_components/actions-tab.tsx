@@ -1,12 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select } from "@/components/ui/input";
-import { Mail } from "lucide-react";
+import { Select, Label, Textarea } from "@/components/ui/input";
+import { Modal } from "@/components/ui/drawer";
+import { Mail, RefreshCw, FileText, CalendarClock, StickyNote, ArrowRightCircle, UserCog, Loader2 } from "lucide-react";
 import { BulkEmailModal } from "./bulk-email-modal";
+import { CRM_STAGES, STAGE_LABELS, type CrmStageKey } from "@/lib/crm-stages";
+import type { StageAction } from "@/lib/crm-stages";
 
 type EmailKind = "email" | "follow_up" | "term_sheet";
 
@@ -16,90 +19,51 @@ interface FirmForActions {
   contacts: Array<{ id: string; name: string; email: string | null }>;
 }
 
-interface TaskForActions {
+interface MemberOption {
   id: string;
-  title: string;
-  status: "open" | "done";
-  batchId: string | null;
-  firm: { id: string; name: string };
+  name: string;
 }
 
-const EMAIL_KIND_LABEL: Record<EmailKind, string> = {
-  email: "Send Email",
-  follow_up: "Send Follow-Up",
-  term_sheet: "Send Term Sheet / LOI",
-};
-
-function inferKind(title: string): EmailKind | null {
-  if (title.startsWith("Send Email —")) return "email";
-  if (title.startsWith("Send Follow-Up —")) return "follow_up";
-  if (title.startsWith("Send Term Sheet / LOI —")) return "term_sheet";
-  return null;
-}
-
-// Section: Actions Within Projects — CRM outreach triggered directly from
-// the project, individually or in bulk, available to any user with
-// send_outreach (Admins and Editors alike). Two ways in: execute a batch of
-// same-action tasks at once (the "create a task for 50 firms, click Send
-// Email" flow), or pick specific firms/contacts ad hoc without a task at
-// all. Both funnel into the same /api/projects/[id]/bulk-email pipeline a
-// single send already uses — CRM stage advance, activity log, and Messages
-// record happen exactly as they would one at a time (see bulk-email route).
+// Section: Actions Within Projects — every CRM action a user can take,
+// individually or in bulk, run directly against firms selected right here.
+// Open to any user with send_outreach/edit_firms (not admin-only) — the
+// action bar pattern (select records, then pick what to do to all of them)
+// mirrors how HubSpot/Salesforce list views handle bulk actions.
 export function ActionsTab({
   projectId,
   firms,
-  tasks,
+  members,
+  handleAction,
   onDone,
 }: {
   projectId: string;
   firms: FirmForActions[];
-  tasks: TaskForActions[];
+  members: MemberOption[];
+  /** From the shared useNextStepActions() instance — reused here so Schedule Meeting opens the exact same modal as everywhere else in the app. */
+  handleAction: (firmId: string, action: NonNullable<StageAction>, meetingId?: string, firmName?: string) => void;
   onDone: () => void;
 }) {
   const [selectedFirmIds, setSelectedFirmIds] = useState<Set<string>>(new Set());
   const [contactOverrides, setContactOverrides] = useState<Record<string, string>>({});
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkKind, setBulkKind] = useState<EmailKind>("email");
-  const [bulkTargets, setBulkTargets] = useState<Array<{ firmId: string; contactId?: string; firmName: string }>>([]);
 
-  const batches = useMemo(() => {
-    const groups = new Map<string, { kind: EmailKind; label: string; taskIds: string[]; firmIds: Set<string> }>();
-    for (const t of tasks) {
-      if (t.status !== "open" || !t.batchId) continue;
-      const kind = inferKind(t.title);
-      if (!kind) continue;
-      const key = t.batchId;
-      if (!groups.has(key)) groups.set(key, { kind, label: EMAIL_KIND_LABEL[kind], taskIds: [], firmIds: new Set() });
-      const g = groups.get(key)!;
-      g.taskIds.push(t.id);
-      g.firmIds.add(t.firm.id);
-    }
-    return Array.from(groups.entries()).map(([batchId, g]) => ({ batchId, ...g }));
-  }, [tasks]);
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [bulkEmailKind, setBulkEmailKind] = useState<EmailKind>("email");
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
+  const [stageValue, setStageValue] = useState<CrmStageKey>("email_sent");
+  const [stageSaving, setStageSaving] = useState(false);
+  const [ownerOpen, setOwnerOpen] = useState(false);
+  const [ownerValue, setOwnerValue] = useState("");
+  const [ownerSaving, setOwnerSaving] = useState(false);
 
-  function targetsFor(firmIds: Set<string> | string[]): Array<{ firmId: string; contactId?: string; firmName: string }> {
-    const ids = Array.from(firmIds);
-    return ids
-      .map((firmId) => firms.find((f) => f.id === firmId))
-      .filter((f): f is FirmForActions => !!f)
-      .map((f) => ({
-        firmId: f.id,
-        contactId: contactOverrides[f.id] ?? f.contacts.find((c) => c.email)?.id,
-        firmName: f.name,
-      }));
-  }
-
-  function runBatch(batch: (typeof batches)[number]) {
-    setBulkKind(batch.kind);
-    setBulkTargets(targetsFor(batch.firmIds));
-    setBulkOpen(true);
-  }
-
-  function runAdHoc() {
-    setBulkKind("email");
-    setBulkTargets(targetsFor(selectedFirmIds));
-    setBulkOpen(true);
-  }
+  const selectedFirms = firms.filter((f) => selectedFirmIds.has(f.id));
+  const targets = selectedFirms.map((f) => ({
+    firmId: f.id,
+    contactId: contactOverrides[f.id] ?? f.contacts.find((c) => c.email)?.id,
+    firmName: f.name,
+  }));
 
   function toggleFirm(id: string) {
     setSelectedFirmIds((prev) => {
@@ -109,38 +73,89 @@ export function ActionsTab({
     });
   }
 
-  return (
-    <div className="space-y-6 pt-4">
-      <div>
-        <h3 className="mb-2 text-sm font-semibold text-text-primary">From Tasks</h3>
-        <p className="mb-3 text-xs text-text-secondary">
-          Tasks added for multiple firms at once (Add Task → Related Firms) show up here as one action you can execute for the whole batch.
-        </p>
-        {batches.length === 0 ? (
-          <p className="text-xs text-text-secondary">No multi-firm email/follow-up/term-sheet tasks open right now.</p>
-        ) : (
-          <div className="space-y-2">
-            {batches.map((b) => (
-              <div key={b.batchId} className="flex items-center justify-between rounded-md border border-border px-3 py-2.5">
-                <div>
-                  <p className="text-sm font-medium text-text-primary">{b.label}</p>
-                  <p className="text-xs text-text-secondary">{b.firmIds.size} firm(s)</p>
-                </div>
-                <Button size="sm" onClick={() => runBatch(b)}>
-                  <Mail className="h-3.5 w-3.5" /> {b.label}
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+  function openEmail(kind: EmailKind) {
+    setBulkEmailKind(kind);
+    setBulkEmailOpen(true);
+  }
 
+  function openScheduleMeeting() {
+    const only = selectedFirms[0];
+    if (!only) return;
+    handleAction(only.id, "schedule_meeting", undefined, only.name);
+  }
+
+  async function submitNote() {
+    if (!noteText.trim()) return;
+    setNoteSaving(true);
+    try {
+      await Promise.all(
+        selectedFirms.map((f) => fetch(`/api/firms/${f.id}/notes`, { method: "POST", body: JSON.stringify({ body: noteText }) }))
+      );
+      setNoteOpen(false);
+      setNoteText("");
+      setSelectedFirmIds(new Set());
+      onDone();
+    } finally {
+      setNoteSaving(false);
+    }
+  }
+
+  async function submitStage() {
+    setStageSaving(true);
+    try {
+      await Promise.all(
+        selectedFirms.map((f) => fetch(`/api/crm/${f.id}/stage`, { method: "PATCH", body: JSON.stringify({ stage: stageValue }) }))
+      );
+      setStageOpen(false);
+      setSelectedFirmIds(new Set());
+      onDone();
+    } finally {
+      setStageSaving(false);
+    }
+  }
+
+  async function submitOwner() {
+    setOwnerSaving(true);
+    try {
+      await Promise.all(
+        selectedFirms.map((f) => fetch(`/api/firms/${f.id}`, { method: "PATCH", body: JSON.stringify({ ownerId: ownerValue || null }) }))
+      );
+      setOwnerOpen(false);
+      setSelectedFirmIds(new Set());
+      onDone();
+    } finally {
+      setOwnerSaving(false);
+    }
+  }
+
+  const hasSelection = selectedFirmIds.size > 0;
+  const singleSelection = selectedFirmIds.size === 1;
+
+  const ACTIONS: Array<{ key: string; label: string; icon: typeof Mail; enabled: boolean; disabledReason?: string; onClick: () => void }> = [
+    { key: "email", label: "Send Email", icon: Mail, enabled: hasSelection, onClick: () => openEmail("email") },
+    { key: "follow_up", label: "Send Follow-Up", icon: RefreshCw, enabled: hasSelection, onClick: () => openEmail("follow_up") },
+    { key: "term_sheet", label: "Send Term Sheet / LOI", icon: FileText, enabled: hasSelection, onClick: () => openEmail("term_sheet") },
+    {
+      key: "meeting",
+      label: "Schedule Meeting",
+      icon: CalendarClock,
+      enabled: singleSelection,
+      disabledReason: "Select exactly one firm to schedule a meeting",
+      onClick: openScheduleMeeting,
+    },
+    { key: "note", label: "Add Note", icon: StickyNote, enabled: hasSelection, onClick: () => setNoteOpen(true) },
+    { key: "stage", label: "Change CRM Stage", icon: ArrowRightCircle, enabled: hasSelection, onClick: () => setStageOpen(true) },
+    { key: "owner", label: "Assign Owner", icon: UserCog, enabled: hasSelection, onClick: () => setOwnerOpen(true) },
+  ];
+
+  return (
+    <div className="space-y-4 pt-4">
       <div>
-        <h3 className="mb-2 text-sm font-semibold text-text-primary">Send Email — Ad Hoc</h3>
-        <p className="mb-3 text-xs text-text-secondary">
-          Pick any firm(s) in this project and, if a firm has more than one contact, choose which one to send to — no task required.
+        <h3 className="mb-1 text-sm font-semibold text-text-primary">1. Select firms</h3>
+        <p className="mb-2 text-xs text-text-secondary">
+          Pick who the action applies to. When a firm has more than one contact, choose which one to use.
         </p>
-        <div className="max-h-72 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+        <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-2">
           {firms.length === 0 && <p className="p-2 text-xs text-text-secondary">No firms in this project yet.</p>}
           {firms.map((f) => (
             <div key={f.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-page">
@@ -165,24 +180,110 @@ export function ActionsTab({
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-end">
-          <Button size="sm" onClick={runAdHoc} disabled={selectedFirmIds.size === 0}>
-            <Mail className="h-3.5 w-3.5" /> Send Email ({selectedFirmIds.size})
-          </Button>
+      </div>
+
+      <div>
+        <h3 className="mb-1 text-sm font-semibold text-text-primary">2. Choose an action</h3>
+        <p className="mb-2 text-xs text-text-secondary">
+          {hasSelection ? `Applies to ${selectedFirmIds.size} firm${selectedFirmIds.size === 1 ? "" : "s"}.` : "Select at least one firm above first."}
+        </p>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {ACTIONS.map((a) => {
+            const Icon = a.icon;
+            return (
+              <button
+                key={a.key}
+                onClick={a.onClick}
+                disabled={!a.enabled}
+                title={!a.enabled ? a.disabledReason ?? "Select at least one firm first" : undefined}
+                className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-4 text-center text-xs font-medium text-text-primary hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface"
+              >
+                <Icon className="h-5 w-5 text-accent" />
+                {a.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <BulkEmailModal
-        open={bulkOpen}
-        onOpenChange={setBulkOpen}
+        open={bulkEmailOpen}
+        onOpenChange={setBulkEmailOpen}
         projectId={projectId}
-        targets={bulkTargets}
-        initialKind={bulkKind}
+        targets={targets}
+        initialKind={bulkEmailKind}
         onSent={() => {
           setSelectedFirmIds(new Set());
           onDone();
         }}
       />
+
+      <Modal open={noteOpen} onOpenChange={setNoteOpen} title="Add Note" widthClassName="max-w-sm">
+        <div className="space-y-3">
+          <p className="text-xs text-text-secondary">Logs the same note to {selectedFirms.length} firm(s)' Activity tab.</p>
+          <div>
+            <Label>Note</Label>
+            <Textarea rows={4} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="What's the update?" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setNoteOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitNote} disabled={noteSaving || !noteText.trim()}>
+              {noteSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add Note
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={stageOpen} onOpenChange={setStageOpen} title="Change CRM Stage" widthClassName="max-w-sm">
+        <div className="space-y-3">
+          <p className="text-xs text-text-secondary">Moves {selectedFirms.length} firm(s) to the selected stage.</p>
+          <div>
+            <Label>New Stage</Label>
+            <Select value={stageValue} onChange={(e) => setStageValue(e.target.value as CrmStageKey)}>
+              {CRM_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {STAGE_LABELS[s]}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setStageOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitStage} disabled={stageSaving}>
+              {stageSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Change Stage
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={ownerOpen} onOpenChange={setOwnerOpen} title="Assign Owner" widthClassName="max-w-sm">
+        <div className="space-y-3">
+          <p className="text-xs text-text-secondary">Sets the owner for {selectedFirms.length} firm(s).</p>
+          <div>
+            <Label>Owner</Label>
+            <Select value={ownerValue} onChange={(e) => setOwnerValue(e.target.value)}>
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setOwnerOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submitOwner} disabled={ownerSaving}>
+              {ownerSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Assign Owner
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
