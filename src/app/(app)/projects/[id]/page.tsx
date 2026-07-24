@@ -23,6 +23,8 @@ interface ProjectFirmRow {
     id: string;
     name: string;
     hqLocation: string | null;
+    strategies: Record<string, string[]>;
+    focusAreas: Record<string, string[]>;
     crmStage: { stage: CrmStageKey; owner: { id: string; name: string } | null } | null;
     contacts: Array<{ id: string; name: string; email: string | null; rank: number }>;
     tasks: Array<{ title: string }>;
@@ -34,9 +36,11 @@ interface TaskRow {
   id: string;
   title: string;
   status: "open" | "done";
+  priority: "low" | "medium" | "high";
   dueDate: string | null;
   isFromTemplate: boolean;
   owner: { id: string; name: string } | null;
+  contact: { id: string; name: string } | null;
   firm: { id: string; name: string };
 }
 
@@ -251,16 +255,17 @@ export default function ProjectDetailPage() {
                   <tr>
                     <th className="w-8"></th>
                     <th>Firm</th>
+                    <th>Strategy</th>
+                    <th>Focus Areas</th>
                     <th>Stage</th>
                     <th>Next Step</th>
-                    <th>Primary Contact</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {project.firms.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-text-secondary">
+                      <td colSpan={7} className="py-8 text-center text-text-secondary">
                         No firms in this project yet.
                       </td>
                     </tr>
@@ -275,11 +280,30 @@ export default function ProjectDetailPage() {
                           {firm.name}
                         </a>
                       </td>
+                      <td className="max-w-[160px]">
+                        <div className="flex flex-wrap gap-1">
+                          {Object.values(firm.strategies ?? {}).flat().slice(0, 3).map((s) => (
+                            <Pill key={s} color="gray">
+                              {s}
+                            </Pill>
+                          ))}
+                          {Object.values(firm.strategies ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
+                        </div>
+                      </td>
+                      <td className="max-w-[160px]">
+                        <div className="flex flex-wrap gap-1">
+                          {Object.values(firm.focusAreas ?? {}).flat().slice(0, 3).map((s) => (
+                            <Pill key={s} color="gray">
+                              {s}
+                            </Pill>
+                          ))}
+                          {Object.values(firm.focusAreas ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
+                        </div>
+                      </td>
                       <td>{firm.crmStage && <Pill color={STAGE_COLORS[firm.crmStage.stage]}>{STAGE_LABELS[firm.crmStage.stage]}</Pill>}</td>
                       <td>
                         <NextStepCell firm={firm} onAction={handleAction} />
                       </td>
-                      <td className="text-text-secondary">{firm.contacts[0]?.name ?? "—"}</td>
                       <td>
                         <button onClick={() => removeFirm(firm.id)} className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red">
                           <Trash2 className="h-3.5 w-3.5" />
@@ -305,6 +329,8 @@ export default function ProjectDetailPage() {
                     <th className="w-8"></th>
                     <th>Task</th>
                     <th>Firm</th>
+                    <th>Contact</th>
+                    <th>Priority</th>
                     <th>Due Date</th>
                     <th>Owner</th>
                     <th></th>
@@ -313,7 +339,7 @@ export default function ProjectDetailPage() {
                 <tbody>
                   {project.tasks.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-text-secondary">
+                      <td colSpan={8} className="py-8 text-center text-text-secondary">
                         No tasks yet.
                       </td>
                     </tr>
@@ -330,6 +356,10 @@ export default function ProjectDetailPage() {
                           {t.isFromTemplate && <Pill color="gray" className="ml-2">CRM Action</Pill>}
                         </td>
                         <td className="text-accent">{t.firm.name}</td>
+                        <td className="text-text-secondary">{t.contact?.name ?? "—"}</td>
+                        <td>
+                          <Pill color={t.priority === "high" ? "red" : t.priority === "low" ? "gray" : "amber"}>{t.priority}</Pill>
+                        </td>
                         <td>{overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : t.dueDate ? formatDate(t.dueDate) : "—"}</td>
                         <td className="text-text-secondary">{t.owner?.name ?? "—"}</td>
                         <td>
@@ -375,7 +405,14 @@ export default function ProjectDetailPage() {
       </Tabs>
 
       <AddFirmsModal open={addFirmsOpen} onOpenChange={setAddFirmsOpen} projectId={project.id} existingFirmIds={existingFirmIds} onAdded={load} />
-      <AddTaskModal open={addTaskOpen} onOpenChange={setAddTaskOpen} projectId={project.id} firms={project.firms.map((f) => f.firm)} onAdded={load} />
+      <AddTaskModal
+        open={addTaskOpen}
+        onOpenChange={setAddTaskOpen}
+        projectId={project.id}
+        firms={project.firms.map((f) => f.firm)}
+        members={project.members.map((m) => ({ id: m.userId, name: m.user.name }))}
+        onAdded={load}
+      />
       <AssignMemberModal open={assignMemberOpen} onOpenChange={setAssignMemberOpen} projectId={project.id} onAdded={load} />
       <BulkEmailModal
         open={bulkEmailOpen}
