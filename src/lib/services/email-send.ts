@@ -107,9 +107,18 @@ export async function sendOutreachEmail(params: {
     const gmail = google.gmail({ version: "v1", auth });
     const signatureHtml = await getGmailSignature(params.userId);
 
+    // A bare address with no display name (e.g. "sydney@adcapital-partners.com"
+    // rather than "Sydney <sydney@adcapital-partners.com>") is part of why some
+    // mail clients show an unverified-sender indicator — the actual SPF/DKIM/
+    // DMARC alignment itself is a Google Workspace + DNS configuration for the
+    // adcapital-partners.com domain, not something this raw MIME message can
+    // fix on its own, but a proper display name is still worth getting right.
+    const sender = await prisma.user.findUnique({ where: { id: params.userId }, select: { name: true } });
+    const fromHeader = sender?.name ? `"${sender.name.replace(/"/g, "")}" <${connection.connectedEmail}>` : connection.connectedEmail;
+
     const raw = buildRawMessage({
       to: params.to,
-      from: connection.connectedEmail,
+      from: fromHeader,
       cc: params.cc,
       bcc: params.bcc,
       subject: params.subject,
