@@ -118,18 +118,18 @@ export function AddFirmsModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Add Firms to Project" widthClassName="max-w-lg">
-      <div className="space-y-3">
-        <div className="flex gap-1 rounded-md border border-border bg-page p-1 text-xs font-medium">
+    <Modal open={open} onOpenChange={onOpenChange} title="Add Firms to Project" widthClassName="max-w-3xl">
+      <div className="space-y-4">
+        <div className="flex gap-1 rounded-md border border-border bg-page p-1 text-sm font-medium">
           <button
             onClick={() => setMode("search")}
-            className={`flex-1 rounded px-2 py-1.5 ${mode === "search" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
+            className={`flex-1 rounded px-3 py-2 ${mode === "search" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
           >
             By Search
           </button>
           <button
             onClick={() => setMode("taxonomy")}
-            className={`flex-1 rounded px-2 py-1.5 ${mode === "taxonomy" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
+            className={`flex-1 rounded px-3 py-2 ${mode === "taxonomy" ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
           >
             By Strategy & Focus Area
           </button>
@@ -137,39 +137,39 @@ export function AddFirmsModal({
 
         {mode === "search" ? (
           <div className="relative">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-            <Input placeholder="Search firms already in your database…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
+            <Input placeholder="Search firms already in your database…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 pl-9" />
           </div>
         ) : (
-          <div className="max-h-48 space-y-3 overflow-y-auto rounded-md border border-border p-2">
-            <div>
-              <p className="mb-1 text-xs font-medium text-text-secondary">Strategies</p>
+          <div className="grid grid-cols-2 gap-4 rounded-md border border-border p-3">
+            <div className="max-h-56 overflow-y-auto pr-1">
+              <p className="mb-1.5 text-xs font-medium text-text-secondary">Strategies</p>
               <TaxonomyPicker taxonomy={STRATEGIES_TAXONOMY} selection={strategies} onChange={setStrategies} />
             </div>
-            <div>
-              <p className="mb-1 text-xs font-medium text-text-secondary">Focus Areas</p>
+            <div className="max-h-56 overflow-y-auto pr-1">
+              <p className="mb-1.5 text-xs font-medium text-text-secondary">Focus Areas</p>
               <TaxonomyPicker taxonomy={FOCUS_AREAS_TAXONOMY} selection={focusAreas} onChange={setFocusAreas} />
             </div>
           </div>
         )}
 
-        <div className="max-h-72 overflow-y-auto rounded-md border border-border">
-          {available.length === 0 && <p className="p-3 text-xs text-text-secondary">No matching firms.</p>}
+        <div className="max-h-96 overflow-y-auto rounded-md border border-border">
+          {available.length === 0 && <p className="p-4 text-sm text-text-secondary">No matching firms.</p>}
           {available.map((f) => (
-            <label key={f.id} className="flex cursor-pointer items-start gap-2.5 border-b border-border px-3 py-2 text-sm last:border-0 hover:bg-page">
+            <label key={f.id} className="flex cursor-pointer items-start gap-3 border-b border-border px-4 py-3 text-sm last:border-0 hover:bg-page">
               <Checkbox checked={selected.has(f.id)} onCheckedChange={() => toggle(f.id)} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-text-primary">{f.name}</span>
+                  <span className="font-medium text-text-primary">{f.name}</span>
                   {f.hqLocation && <span className="text-xs text-text-secondary">{f.hqLocation}</span>}
                 </div>
-                <div className="mt-1 flex flex-wrap gap-1">
-                  {Object.values(f.strategies).flat().slice(0, 3).map((s) => (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {Object.values(f.strategies).flat().slice(0, 4).map((s) => (
                     <Pill key={s} color="gray">
                       {s}
                     </Pill>
                   ))}
-                  {Object.values(f.focusAreas).flat().slice(0, 3).map((s) => (
+                  {Object.values(f.focusAreas).flat().slice(0, 4).map((s) => (
                     <Pill key={s} color="gray">
                       {s}
                     </Pill>
@@ -180,13 +180,16 @@ export function AddFirmsModal({
           ))}
         </div>
         {error && <p className="text-xs text-status-red">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={loading || selected.size === 0}>
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add {selected.size > 0 ? `${selected.size} ` : ""}Firm{selected.size === 1 ? "" : "s"}
-          </Button>
+        <div className="flex items-center justify-between border-t border-border pt-4">
+          <p className="text-xs text-text-secondary">{selected.size} selected</p>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button onClick={submit} disabled={loading || selected.size === 0}>
+              {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add {selected.size > 0 ? `${selected.size} ` : ""}Firm{selected.size === 1 ? "" : "s"}
+            </Button>
+          </div>
         </div>
       </div>
     </Modal>
