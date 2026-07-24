@@ -1,16 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Pill, TagPill } from "@/components/ui/badge";
 import { Textarea, Input } from "@/components/ui/input";
-import { formatDateTime, cn } from "@/lib/utils";
+import { formatDateTime, formatRelativeListTime, cn } from "@/lib/utils";
 import {
-  Mail,
   Plus,
   RefreshCw,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
+  ArrowLeft,
   Reply,
   Users,
   Forward,
@@ -26,6 +27,8 @@ import {
   Download,
 } from "lucide-react";
 import { NewMessageModal, type DraftRecord } from "./_components/new-message-modal";
+
+const PAGE_SIZE = 50;
 
 interface Attachment {
   filename: string;
@@ -64,6 +67,7 @@ interface PendingAttachment {
 }
 
 type Folder = "inbox" | "sent" | "drafts" | "bin";
+type View = "list" | "reader";
 
 const FOLDERS: { key: Folder; label: string; icon: typeof InboxIcon }[] = [
   { key: "inbox", label: "Inbox", icon: InboxIcon },
@@ -83,6 +87,8 @@ function fileToBase64(file: File): Promise<string> {
 
 export default function MessagesPage() {
   const [folder, setFolder] = useState<Folder>("inbox");
+  const [view, setView] = useState<View>("list");
+  const [page, setPage] = useState(1);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,8 +126,15 @@ export default function MessagesPage() {
     [folder, loadThreads, loadDrafts]
   );
 
-  useEffect(() => {
+  // Switching folders always goes back to the list view, page 1.
+  function selectFolder(f: Folder) {
+    setFolder(f);
+    setView("list");
+    setPage(1);
     setOpenId(null);
+  }
+
+  useEffect(() => {
     load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folder]);
@@ -134,6 +147,15 @@ export default function MessagesPage() {
     const interval = setInterval(() => loadThreads(folder, false), 20_000);
     return () => clearInterval(interval);
   }, [folder, loadThreads]);
+
+  const pageCount = folder === "drafts" ? Math.max(1, Math.ceil(drafts.length / PAGE_SIZE)) : Math.max(1, Math.ceil(threads.length / PAGE_SIZE));
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
+  const pagedThreads = useMemo(() => threads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [threads, page]);
+  const pagedDrafts = useMemo(() => drafts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [drafts, page]);
+  const rangeStart = (page - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(page * PAGE_SIZE, folder === "drafts" ? drafts.length : threads.length);
 
   const active = threads.find((t) => t.id === openId) ?? null;
 
@@ -157,6 +179,16 @@ export default function MessagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
+  function openThread(id: string) {
+    setOpenId(id);
+    setView("reader");
+  }
+
+  function backToList() {
+    setView("list");
+    setOpenId(null);
+  }
+
   function toggleExpanded(id: string) {
     setExpandedIds((prev) => {
       const next = new Set(prev);
@@ -175,6 +207,10 @@ export default function MessagesPage() {
   function senderLabel(t: Thread, m: Message): string {
     if (m.direction === "outbound") return "You";
     return t.contact?.name ?? t.adHocRecipientName ?? recipientLabel(t);
+  }
+
+  function listSenderLabel(t: Thread): string {
+    return t.firm ? t.firm.name : recipientLabel(t);
   }
 
   function initials(label: string): string {
@@ -196,20 +232,20 @@ export default function MessagesPage() {
   async function moveToBin(t: Thread) {
     await fetch(`/api/messages/${t.id}`, { method: "PATCH", body: JSON.stringify({ deletedAt: true }) });
     setThreads((prev) => prev.filter((x) => x.id !== t.id));
-    setOpenId(null);
+    backToList();
   }
 
   async function restoreFromBin(t: Thread) {
     await fetch(`/api/messages/${t.id}`, { method: "PATCH", body: JSON.stringify({ deletedAt: false }) });
     setThreads((prev) => prev.filter((x) => x.id !== t.id));
-    setOpenId(null);
+    backToList();
   }
 
   async function deleteForever(t: Thread) {
     if (!confirm(`Permanently delete "${t.subject}"? This cannot be undone.`)) return;
     await fetch(`/api/messages/${t.id}`, { method: "DELETE" });
     setThreads((prev) => prev.filter((x) => x.id !== t.id));
-    setOpenId(null);
+    backToList();
   }
 
   async function deleteDraft(id: string) {
@@ -294,8 +330,8 @@ export default function MessagesPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-[200px_320px_1fr] gap-4">
-        {/* Left navigation */}
+      <div className="grid grid-cols-[200px_1fr] gap-4">
+        {/* Left navigation — fixed */}
         <div className="space-y-1">
           <Button
             className="w-full justify-start"
@@ -314,7 +350,7 @@ export default function MessagesPage() {
               return (
                 <button
                   key={f.key}
-                  onClick={() => setFolder(f.key)}
+                  onClick={() => selectFolder(f.key)}
                   className={cn(
                     "flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm",
                     folder === f.key ? "bg-primary text-white" : "text-text-primary hover:bg-page"
@@ -330,94 +366,27 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* Message list */}
-        <div className="max-h-[calc(100vh-180px)] overflow-y-auto rounded-lg border border-border bg-surface">
-          {loading && <div className="p-4 text-sm text-text-secondary">Loading…</div>}
-
-          {folder === "drafts" ? (
-            <>
-              {!loading && drafts.length === 0 && <div className="p-4 text-sm text-text-secondary">No drafts saved.</div>}
-              {drafts.map((d) => (
-                <div key={d.id} className="group flex items-center gap-1 border-b border-border last:border-0 hover:bg-page">
-                  <button
-                    onClick={() => {
-                      setEditingDraft(d);
-                      setForwardFrom(null);
-                      setComposeOpen(true);
-                    }}
-                    className="flex-1 px-4 py-3 text-left"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Pill color="gray">Draft</Pill>
-                      <span className="truncate text-sm font-medium text-text-primary">{d.subject || "(no subject)"}</span>
-                    </div>
-                    <p className="truncate text-xs text-text-secondary">{d.toEmail || "No recipient yet"}</p>
-                    <p className="truncate text-xs text-text-secondary">{d.body.replace(/\s+/g, " ").slice(0, 100)}</p>
-                  </button>
-                  <button
-                    onClick={() => deleteDraft(d.id)}
-                    className="mr-2 rounded p-1.5 text-text-secondary opacity-0 hover:bg-page hover:text-status-red group-hover:opacity-100"
-                    title="Delete draft"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-            </>
-          ) : (
-            <>
-              {!loading && threads.length === 0 && (
-                <div className="p-4 text-sm text-text-secondary">
-                  {folder === "inbox" ? "No messages in your inbox." : folder === "sent" ? "Nothing sent yet." : "Bin is empty."}
-                </div>
-              )}
-              {threads.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setOpenId(t.id)}
-                  className={cn(
-                    "block w-full border-b border-border px-4 py-3 text-left last:border-0 hover:bg-page",
-                    active?.id === t.id && "bg-page"
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={cn("truncate text-sm text-text-primary", t.hasUnreadReply ? "font-bold" : "font-medium")}>{t.subject}</span>
-                    <div className="flex shrink-0 items-center gap-1">
-                      {t.hasUnreadReply && <span className="h-2 w-2 rounded-full bg-accent" />}
-                      {t.isFreeForm && <Pill color="gray">General</Pill>}
-                    </div>
-                  </div>
-                  <p className={cn("truncate text-xs", t.hasUnreadReply ? "font-semibold text-text-primary" : "text-text-secondary")}>
-                    {t.firm ? t.firm.name : recipientLabel(t)}
-                  </p>
-                  <p className="truncate text-xs text-text-secondary">{snippet(t)}</p>
-                  <p className="mt-0.5 text-[11px] text-text-secondary">{formatDateTime(t.lastActivityAt)}</p>
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-
-        {/* Reading pane */}
-        <div className="rounded-lg border border-border bg-surface">
-          {!active ? (
-            <div className="flex h-full items-center justify-center py-20 text-text-secondary">
-              <Mail className="mr-2 h-4 w-4" /> Select a message
-            </div>
-          ) : (
+        {/* Right panel — list OR reader, never both */}
+        <div className="min-h-[calc(100vh-180px)] rounded-lg border border-border bg-surface">
+          {view === "reader" && active ? (
             <div className="flex h-full flex-col">
               <div className="flex items-start justify-between border-b border-border px-5 py-4">
-                <div>
-                  <h2 className="text-sm font-semibold text-text-primary">{active.subject}</h2>
-                  <p className="text-xs text-text-secondary">
-                    {active.firm ? (
-                      <>
-                        {active.firm.name} · {recipientLabel(active)}
-                      </>
-                    ) : (
-                      recipientLabel(active)
-                    )}
-                  </p>
+                <div className="flex items-start gap-3">
+                  <button onClick={backToList} className="mt-0.5 rounded-md p-1 text-text-secondary hover:bg-page hover:text-text-primary" title="Back">
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                  <div>
+                    <h2 className="text-sm font-semibold text-text-primary">{active.subject}</h2>
+                    <p className="text-xs text-text-secondary">
+                      {active.firm ? (
+                        <>
+                          {active.firm.name} · {recipientLabel(active)}
+                        </>
+                      ) : (
+                        recipientLabel(active)
+                      )}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
                   {folder === "bin" ? (
@@ -591,6 +560,99 @@ export default function MessagesPage() {
                   )}
                 </div>
               )}
+            </div>
+          ) : (
+            <div className="flex h-full flex-col">
+              <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
+                <span className="text-xs font-medium uppercase tracking-wide text-text-secondary">
+                  {FOLDERS.find((f) => f.key === folder)?.label}
+                </span>
+                {(folder === "drafts" ? drafts.length : threads.length) > 0 && (
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <span>
+                      {rangeStart}–{rangeEnd}
+                    </span>
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                      className="rounded p-1 hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                      disabled={page >= pageCount}
+                      className="rounded p-1 hover:bg-page disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {loading && <div className="p-4 text-sm text-text-secondary">Loading…</div>}
+
+                {folder === "drafts" ? (
+                  <>
+                    {!loading && drafts.length === 0 && <div className="p-4 text-sm text-text-secondary">No drafts saved.</div>}
+                    {pagedDrafts.map((d) => (
+                      <div key={d.id} className="group flex items-center gap-1 border-b border-border last:border-0 hover:bg-page">
+                        <button
+                          onClick={() => {
+                            setEditingDraft(d);
+                            setForwardFrom(null);
+                            setComposeOpen(true);
+                          }}
+                          className="flex-1 px-4 py-3 text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Pill color="gray">Draft</Pill>
+                            <span className="truncate text-sm font-medium text-text-primary">{d.subject || "(no subject)"}</span>
+                          </div>
+                          <p className="truncate text-xs text-text-secondary">{d.toEmail || "No recipient yet"}</p>
+                          <p className="truncate text-xs text-text-secondary">{d.body.replace(/\s+/g, " ").slice(0, 100)}</p>
+                        </button>
+                        <button
+                          onClick={() => deleteDraft(d.id)}
+                          className="mr-2 rounded p-1.5 text-text-secondary opacity-0 hover:bg-page hover:text-status-red group-hover:opacity-100"
+                          title="Delete draft"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    {!loading && threads.length === 0 && (
+                      <div className="p-4 text-sm text-text-secondary">
+                        {folder === "inbox" ? "No messages in your inbox." : folder === "sent" ? "Nothing sent yet." : "Bin is empty."}
+                      </div>
+                    )}
+                    {pagedThreads.map((t) => {
+                      const unread = t.hasUnreadReply;
+                      return (
+                        <button
+                          key={t.id}
+                          onClick={() => openThread(t.id)}
+                          className="grid w-full grid-cols-[180px_1fr_auto] items-center gap-3 border-b border-border px-4 py-3 text-left last:border-0 hover:bg-page"
+                        >
+                          <span className={cn("truncate text-sm text-text-primary", unread ? "font-bold" : "font-normal")}>{listSenderLabel(t)}</span>
+                          <span className="min-w-0 truncate text-sm">
+                            <span className={cn("text-text-primary", unread ? "font-bold" : "font-normal")}>{t.subject}</span>
+                            <span className="text-text-secondary"> — {snippet(t)}</span>
+                          </span>
+                          <span className="flex shrink-0 items-center gap-1.5 text-xs text-text-secondary">
+                            {unread && <span className="h-2 w-2 rounded-full bg-accent" />}
+                            {formatRelativeListTime(t.lastActivityAt)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
             </div>
           )}
         </div>
