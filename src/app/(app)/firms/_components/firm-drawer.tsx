@@ -183,7 +183,25 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
         open={!!firmId}
         onOpenChange={(o) => !o && onClose()}
         title={loading || !firm ? "Loading…" : firm.name}
-        subtitle={firm ? `${firm.hqLocation ?? "HQ unknown"} · ${firm.domain ?? "no domain resolved"}` : undefined}
+        subtitle={
+          firm ? (
+            <>
+              {firm.hqLocation ?? "HQ unknown"} ·{" "}
+              {firm.domain ? (
+                <a
+                  href={`https://${firm.domain}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent hover:underline"
+                >
+                  {firm.domain}
+                </a>
+              ) : (
+                "no domain resolved"
+              )}
+            </>
+          ) : undefined
+        }
         widthClassName="max-w-3xl"
       >
         {!firm ? (
