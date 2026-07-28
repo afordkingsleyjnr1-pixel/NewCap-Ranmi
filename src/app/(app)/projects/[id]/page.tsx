@@ -18,6 +18,7 @@ import { AssignMemberModal } from "./_components/assign-member-modal";
 import { BulkEmailModal } from "./_components/bulk-email-modal";
 import { ActionsTab } from "./_components/actions-tab";
 import { TaskDetailModal } from "./_components/task-detail-modal";
+import { ProjectMessagesTab } from "./_components/project-messages-tab";
 
 interface ProjectFirmRow {
   firmId: string;
@@ -214,6 +215,7 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="firms">Firms ({project.firms.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
+          <TabsTrigger value="messages">Messages</TabsTrigger>
           <TabsTrigger value="members">Members ({project.members.length})</TabsTrigger>
         </TabsList>
 
@@ -428,6 +430,10 @@ export default function ProjectDetailPage() {
             handleAction={handleAction}
             onDone={load}
           />
+        </TabsContent>
+
+        <TabsContent value="messages">
+          <ProjectMessagesTab projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="members">
