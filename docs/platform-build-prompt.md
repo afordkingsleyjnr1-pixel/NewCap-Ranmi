@@ -619,11 +619,16 @@ badge components draw from, so stage colors, classification-status badges, and
 domain-resolution-status indicators all visually share one semantic language instead of
 each picking its own colors.
 
-**Shared UI primitives** (`src/components/ui/`) — a small local component kit, not a
-third-party library: `button`, `input` (+ a `Select` variant in the same file), `card`,
-`badge`, `checkbox`, `avatar`, `tabs`, `accordion`, `dropdown-menu`, `drawer` (the sliding
-side-panel pattern behind the Firm Drawer, §7), `password-input`. Two are worth calling out
-specifically since they encode real behavior, not just styling:
+**Shared UI primitives** (`src/components/ui/`) — *correction*: these are locally-styled
+wrappers around **Radix UI primitives** (`@radix-ui/react-accordion`, `-avatar`,
+`-checkbox`, `-dialog`, `-dropdown-menu`, `-label`, `-popover`, `-select`, `-tabs`,
+`-toast`, `-tooltip` are all real dependencies), composed with `class-variance-authority`
++ `tailwind-merge` + `clsx` — the standard shadcn/ui-style pattern, not a from-scratch
+component kit. Files present: `button`, `input` (+ a `Select` variant in the same file),
+`card`, `badge`, `checkbox`, `avatar`, `tabs`, `accordion`, `dropdown-menu`, `drawer` (the
+sliding side-panel pattern behind the Firm Drawer, §7, likely wrapping Radix Dialog),
+`password-input`. Two are worth calling out specifically since they encode real behavior,
+not just styling:
 - **`AumInput`** — lets a user type "1" and pick "Billion" instead of nine zeros; internally
   splits/recombines into the same raw-USD string the rest of the app already expects
   (`aumValue`), and only re-derives its displayed figure/unit from external value changes
@@ -669,3 +674,10 @@ lives here, not in the sidebar).
   `title`/`description` metadata ("NewCap Ranmi — Capital Introduction CRM"), no favicon
   customization, no analytics/monitoring script, no client-side providers wrapping the
   tree (theme, query-client, etc. are set up per-page/per-feature if at all, not globally).
+
+**Auth/crypto libraries confirmed by `package.json`**: `bcryptjs` (password hashing) and
+`jsonwebtoken` (session signing, consuming `AUTH_SECRET`) are the actual mechanisms behind
+§15/§22's auth discussion — not custom-rolled. `date-fns` handles date formatting/parsing
+throughout; `isomorphic-fetch` supports `@microsoft/microsoft-graph-client`. No CI
+workflows (`.github/`) and no Docker setup exist in this repo — deployment is Vercel-only,
+per `vercel.json` (§24).
