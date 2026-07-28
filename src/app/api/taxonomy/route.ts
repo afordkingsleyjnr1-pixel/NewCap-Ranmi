@@ -4,8 +4,8 @@ import { requirePermission, ForbiddenError } from "@/lib/authz";
 import { getBothTaxonomies, saveTaxonomy } from "@/lib/services/taxonomy-store";
 import type { TaxonomyKind } from "@/generated/prisma";
 
-// Every taxonomy picker in the app (Entity Database filters, Add Entity,
-// Populate, Project Add Entities) reads the live, editable taxonomy from here
+// Every taxonomy picker in the app (Firm Database filters, Add Firm,
+// Populate, Project Add Firms) reads the live, editable taxonomy from here
 // instead of importing the static defaults directly.
 export async function GET() {
   const user = await getCurrentUser();

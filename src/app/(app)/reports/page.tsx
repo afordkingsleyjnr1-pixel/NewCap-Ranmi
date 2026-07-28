@@ -75,7 +75,7 @@ export default function ReportsPage() {
               {data.closedWon.length === 0 && <p className="text-sm text-text-secondary">No closed-won deals yet.</p>}
               {data.closedWon.map((row: any) => (
                 <div key={row.id} className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
-                  <span className="font-medium text-text-primary">{row.entity.name}</span>
+                  <span className="font-medium text-text-primary">{row.firm.name}</span>
                   <span className="text-text-secondary">{row.dealNotes ?? "—"}</span>
                   <span className="text-text-secondary">{formatDate(row.stageChangedAt)}</span>
                 </div>

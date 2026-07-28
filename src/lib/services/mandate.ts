@@ -14,18 +14,18 @@ export function deriveWithinMandate(
   return aumValue >= band.aumMin && aumValue <= band.aumMax ? "yes" : "no";
 }
 
-/** Section 4.6 — recompute within_mandate for every entity whose flag isn't manually overridden. */
+/** Section 4.6 — recompute within_mandate for every firm whose flag isn't manually overridden. */
 export async function recomputeMandateForAllFirms() {
   const band = await getMandateSettings();
-  const entities = await prisma.entity.findMany({
+  const firms = await prisma.firm.findMany({
     where: { withinMandateManual: false, deletedAt: null },
     select: { id: true, aumValue: true },
   });
   let updated = 0;
-  for (const entity of entities) {
-    const value = entity.aumValue ? Number(entity.aumValue) : null;
+  for (const firm of firms) {
+    const value = firm.aumValue ? Number(firm.aumValue) : null;
     const nextFlag = deriveWithinMandate(value, { aumMin: Number(band.aumMin), aumMax: Number(band.aumMax) });
-    await prisma.entity.update({ where: { id: entity.id }, data: { withinMandate: nextFlag } });
+    await prisma.firm.update({ where: { id: firm.id }, data: { withinMandate: nextFlag } });
     updated++;
   }
   return updated;

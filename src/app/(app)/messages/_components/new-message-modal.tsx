@@ -20,7 +20,7 @@ interface PendingAttachment {
 
 export interface DraftRecord {
   id: string;
-  entityId: string | null;
+  firmId: string | null;
   contactId: string | null;
   replyToThreadId: string | null;
   toName: string | null;
@@ -58,8 +58,8 @@ export function NewMessageModal({
   /** Opens an existing saved draft for editing — Save as Draft updates it in place, Send removes it once sent. */
   draft?: DraftRecord | null;
 }) {
-  const [entities, setFirms] = useState<FirmOption[]>([]);
-  const [entityId, setFirmId] = useState("");
+  const [firms, setFirms] = useState<FirmOption[]>([]);
+  const [firmId, setFirmId] = useState("");
   const [firmContacts, setFirmContacts] = useState<Array<{ id: string; name: string; email: string | null }>>([]);
   const [contactId, setContactId] = useState("");
   const [toName, setToName] = useState("");
@@ -77,12 +77,12 @@ export function NewMessageModal({
 
   useEffect(() => {
     if (open) {
-      fetch("/api/entities")
+      fetch("/api/firms")
         .then((r) => r.json())
-        .then((d) => setFirms((d.entities ?? []).map((f: any) => ({ id: f.id, name: f.name }))))
+        .then((d) => setFirms((d.firms ?? []).map((f: any) => ({ id: f.id, name: f.name }))))
         .catch(() => setFirms([]));
       if (draft) {
-        setFirmId(draft.entityId ?? "");
+        setFirmId(draft.firmId ?? "");
         setContactId(draft.contactId ?? "");
         setToName(draft.toName ?? "");
         setToEmail(draft.toEmail ?? "");
@@ -114,15 +114,15 @@ export function NewMessageModal({
   }, [open, forwardFrom, draft?.id]);
 
   useEffect(() => {
-    if (!entityId) {
+    if (!firmId) {
       setFirmContacts([]);
       return;
     }
-    fetch(`/api/entities/${entityId}`)
+    fetch(`/api/firms/${firmId}`)
       .then((r) => r.json())
-      .then((d) => setFirmContacts(d.entity?.contacts ?? []))
+      .then((d) => setFirmContacts(d.firm?.contacts ?? []))
       .catch(() => setFirmContacts([]));
-  }, [entityId]);
+  }, [firmId]);
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -152,7 +152,7 @@ export function NewMessageModal({
 
   function draftPayload() {
     return {
-      entityId: entityId || null,
+      firmId: firmId || null,
       contactId: contactId || null,
       replyToThreadId: draft?.replyToThreadId ?? null,
       toName: contactId ? null : toName || null,
@@ -199,7 +199,7 @@ export function NewMessageModal({
         const res = await fetch("/api/messages/send", {
           method: "POST",
           body: JSON.stringify({
-            entityId: entityId || undefined,
+            firmId: firmId || undefined,
             contactId: contactId || undefined,
             toName: contactId ? undefined : toName,
             toEmail: contactId ? undefined : toEmail,
@@ -232,16 +232,16 @@ export function NewMessageModal({
     >
       <div className="space-y-3">
         <div>
-          <Label>Link to entity (optional)</Label>
+          <Label>Link to firm (optional)</Label>
           <Select
-            value={entityId}
+            value={firmId}
             onChange={(e) => {
               setFirmId(e.target.value);
               setContactId("");
             }}
           >
-            <option value="">— No entity, just send a message —</option>
-            {entities.map((f) => (
+            <option value="">— No firm, just send a message —</option>
+            {firms.map((f) => (
               <option key={f.id} value={f.id}>
                 {f.name}
               </option>
@@ -249,7 +249,7 @@ export function NewMessageModal({
           </Select>
         </div>
 
-        {entityId ? (
+        {firmId ? (
           <div>
             <Label>Recipient (To)</Label>
             <Select value={contactId} onChange={(e) => setContactId(e.target.value)}>

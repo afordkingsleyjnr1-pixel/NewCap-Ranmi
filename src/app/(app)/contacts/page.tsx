@@ -5,10 +5,10 @@ import { Input, Select } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Search, Pencil } from "lucide-react";
 import { STAGE_LABELS, STAGE_COLORS, type CrmStageKey } from "@/lib/crm-stages";
-import { FirmDrawer } from "../entities/_components/entity-drawer";
+import { FirmDrawer } from "../firms/_components/firm-drawer";
 import { NextStepCell } from "../crm/_components/next-step-cell";
 import { useNextStepActions } from "../crm/_components/use-next-step-actions";
-import { EditContactModal, type EditableContact } from "../entities/_components/edit-contact-modal";
+import { EditContactModal, type EditableContact } from "../firms/_components/edit-contact-modal";
 
 interface ContactRow {
   id: string;
@@ -18,10 +18,10 @@ interface ContactRow {
   emailStatus: string;
   alternateEmails: string[];
   linkedinUrl: string | null;
-  entity: {
+  firm: {
     id: string;
     name: string;
-    stage: { stage: CrmStageKey } | null;
+    crmStage: { stage: CrmStageKey } | null;
     tasks: Array<{ title: string }>;
     meetings: Array<{ id: string; endTime: string; status: string }>;
   };
@@ -56,7 +56,7 @@ export default function ContactsPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-xl font-semibold text-text-primary">Contacts</h1>
-        <p className="text-sm text-text-secondary">{contacts.length} contacts across all entities</p>
+        <p className="text-sm text-text-secondary">{contacts.length} contacts across all firms</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
@@ -78,7 +78,7 @@ export default function ContactsPage() {
             <tr>
               <th>Name</th>
               <th>Email</th>
-              <th>Entity</th>
+              <th>Firm</th>
               <th>Current Stage</th>
               <th>Next Step</th>
               <th></th>
@@ -100,9 +100,9 @@ export default function ContactsPage() {
               </tr>
             )}
             {contacts.map((c) => {
-              const stage = c.entity.stage?.stage;
+              const stage = c.firm.crmStage?.stage;
               return (
-                <tr key={c.id} onClick={() => setOpenFirmId(c.entity.id)}>
+                <tr key={c.id} onClick={() => setOpenFirmId(c.firm.id)}>
                   <td className="font-medium text-text-primary">{c.name}</td>
                   <td>
                     <div className="flex items-center gap-1.5">
@@ -114,10 +114,10 @@ export default function ContactsPage() {
                       )}
                     </div>
                   </td>
-                  <td className="text-accent">{c.entity.name}</td>
+                  <td className="text-accent">{c.firm.name}</td>
                   <td>{stage && <Pill color={STAGE_COLORS[stage]}>{STAGE_LABELS[stage]}</Pill>}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <NextStepCell entity={c.entity} onAction={handleAction} />
+                    <NextStepCell firm={c.firm} onAction={handleAction} />
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <button
@@ -137,7 +137,7 @@ export default function ContactsPage() {
         </table>
       </div>
 
-      <FirmDrawer entityId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
       <EditContactModal open={!!editingContact} onOpenChange={(o) => !o && setEditingContact(null)} contact={editingContact} onSaved={load} />
       {modals}
     </div>

@@ -14,16 +14,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     throw e;
   }
   const { id } = await params;
-  const entity = await prisma.entity.findUniqueOrThrow({ where: { id } });
+  const firm = await prisma.firm.findUniqueOrThrow({ where: { id } });
 
-  if (!entity.domain) {
+  if (!firm.domain) {
     return NextResponse.json(
-      { error: "Entity has no resolved domain. Confirm the domain in the drawer before running Find Contact." },
+      { error: "Firm has no resolved domain. Confirm the domain in the drawer before running Find Contact." },
       { status: 400 }
     );
   }
 
-  const discovered = await discoverContacts({ firmName: entity.name, domain: entity.domain });
+  const discovered = await discoverContacts({ firmName: firm.name, domain: firm.domain });
   const created = [];
   const warnings: string[] = [];
   const hunterConfigured = await isHunterConfigured();
@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   for (const c of discovered) {
     const contact = await prisma.contact.create({
-      data: { entityId: id, name: c.name, title: c.title, linkedinUrl: c.linkedinUrl, rank: c.rank, isPrimaryBdContact: c.rank === 1 },
+      data: { firmId: id, name: c.name, title: c.title, linkedinUrl: c.linkedinUrl, rank: c.rank, isPrimaryBdContact: c.rank === 1 },
     });
     if (c.sourceDescription) {
       await prisma.researchSource.create({
@@ -45,7 +45,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       const [first, ...rest] = c.name.split(" ");
       const last = rest.join(" ") || first;
       try {
-        const emailResult = await findEmail({ domain: entity.domain, firstName: first, lastName: last });
+        const emailResult = await findEmail({ domain: firm.domain, firstName: first, lastName: last });
         if (emailResult.email) {
           await prisma.contact.update({
             where: { id: contact.id },

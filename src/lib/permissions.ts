@@ -14,12 +14,12 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
-  edit_firms: "Edit entity details, Add Entity, trigger Reclassify",
+  edit_firms: "Edit firm details, Add Firm, trigger Reclassify",
   manage_contacts: "Manage contacts",
   send_outreach: "Send email / follow-up (requires connecting mailbox)",
   manage_meetings: "Schedule / reschedule / cancel meetings",
   manage_tasks: "Manage project tasks & checklists",
-  run_populate: "Run Populate (find similar entities)",
+  run_populate: "Run Populate (find similar firms)",
   export_data: "Export CSV / XLSX",
   manage_settings: "Account settings (mandate band, API keys, Reclassify All)",
   manage_team: "Invite users, manage roles",
@@ -31,7 +31,7 @@ export const VIEWER_ROLE_NAME = "Viewer";
 
 // Standard three-tier workspace roles — Admin has every permission
 // (including workspace-level settings/team/billing-adjacent actions);
-// Editor can do everything content-related (entities, contacts, outreach,
+// Editor can do everything content-related (firms, contacts, outreach,
 // meetings, tasks, Populate, export) but can't touch account settings or
 // team/role management; Viewer is read-only. Used to seed the system
 // default roles on bootstrap and via migration for already-provisioned

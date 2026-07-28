@@ -12,7 +12,7 @@ interface UserOption {
 export interface FirmContextMenuTarget {
   x: number;
   y: number;
-  entityId: string;
+  firmId: string;
   firmName: string;
   domain: string | null;
 }
@@ -125,7 +125,7 @@ export function FirmContextMenu({
         )}
       </div>
 
-      <MenuItem icon={Sparkles} label="Find Similar Entities" onClick={onFindSimilar} />
+      <MenuItem icon={Sparkles} label="Find Similar Firms" onClick={onFindSimilar} />
       {target.domain && (
         <MenuItem icon={ExternalLink} label="Visit Website" onClick={() => window.open(`https://${target.domain}`, "_blank", "noopener,noreferrer")} />
       )}

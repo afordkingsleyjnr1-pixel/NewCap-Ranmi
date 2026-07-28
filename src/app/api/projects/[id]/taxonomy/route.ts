@@ -47,7 +47,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 }
 
 function taxonomyPrompt(): string {
-  return `You are a taxonomy designer for an institutional capital-introduction CRM. Given a natural-language description of a project's focus, propose a classification structure to organize the entities tracked within this one project.
+  return `You are a taxonomy designer for an institutional capital-introduction CRM. Given a natural-language description of a project's focus, propose a classification structure to organize the firms tracked within this one project.
 
 Respond with strict JSON only, no prose:
 {"taxonomy": {"Parent Group Name": ["Child Category 1", "Child Category 2"], "Another Parent Group": ["Child A", "Child B"]}}

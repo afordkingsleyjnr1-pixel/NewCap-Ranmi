@@ -61,7 +61,7 @@ export function AccountSettingsTab() {
     setReclassifyResult(null);
     const res = await fetch("/api/settings/reclassify-all", { method: "POST" });
     const data = await res.json();
-    setReclassifyResult(res.ok ? `${data.changed} of ${data.totalFirms} entities updated.` : data.error);
+    setReclassifyResult(res.ok ? `${data.changed} of ${data.totalFirms} firms updated.` : data.error);
     setReclassifying(false);
   }
 
@@ -98,7 +98,7 @@ export function AccountSettingsTab() {
                   <AumInput value={mandate.aumMax} onChange={(v) => setMandate({ ...mandate, aumMax: v })} />
                 </div>
               </div>
-              <p className="text-xs text-text-secondary">Editing this immediately recomputes Within Mandate for every existing entity.</p>
+              <p className="text-xs text-text-secondary">Editing this immediately recomputes Within Mandate for every existing firm.</p>
               <Button size="sm" onClick={saveMandate} disabled={savingMandate}>
                 {savingMandate && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
               </Button>
@@ -141,7 +141,7 @@ export function AccountSettingsTab() {
           <CardTitle>Reclassify All</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          <p className="text-xs text-text-secondary">Batch re-runs the Classification Engine across every entity in the database.</p>
+          <p className="text-xs text-text-secondary">Batch re-runs the Classification Engine across every firm in the database.</p>
           <Button size="sm" variant="outline" onClick={reclassifyAll} disabled={reclassifying}>
             {reclassifying && <Loader2 className="h-3.5 w-3.5 animate-spin" />} {reclassifying ? "Reclassifying…" : "Reclassify All"}
           </Button>

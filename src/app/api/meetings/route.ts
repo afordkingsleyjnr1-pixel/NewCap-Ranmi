@@ -8,10 +8,10 @@ import { completePendingTask } from "@/lib/services/pipeline-tasks";
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  // Section 5.8 step 8 — Upcoming Meetings: every future meeting across all entities, chronological.
+  // Section 5.8 step 8 — Upcoming Meetings: every future meeting across all firms, chronological.
   const meetings = await prisma.meeting.findMany({
     where: { status: "scheduled", startTime: { gte: new Date() } },
-    include: { entity: true, contact: true },
+    include: { firm: true, contact: true },
     orderBy: { startTime: "asc" },
   });
   return NextResponse.json({ meetings });
@@ -27,11 +27,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { entityId, contactId, adHocName, adHocEmail, title, startTime, endTime, locationOrLink, agendaNotes } = body;
+  const { firmId, contactId, adHocName, adHocEmail, title, startTime, endTime, locationOrLink, agendaNotes } = body;
 
-  const stage = await prisma.entityStage.findUniqueOrThrow({ where: { entityId } });
-  if (stage.stage === "do_not_contact") {
-    return NextResponse.json({ error: "This entity is marked Do Not Contact. Scheduling is blocked." }, { status: 403 });
+  const crmStage = await prisma.crmStageRow.findUniqueOrThrow({ where: { firmId } });
+  if (crmStage.stage === "do_not_contact") {
+    return NextResponse.json({ error: "This firm is marked Do Not Contact. Scheduling is blocked." }, { status: 403 });
   }
 
   const connection = await prisma.emailConnection.findUnique({ where: { userId: user!.id } });
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   const attendeeEmail = contactId ? (await prisma.contact.findUniqueOrThrow({ where: { id: contactId } })).email : adHocEmail;
   if (!attendeeEmail) return NextResponse.json({ error: "No attendee email available" }, { status: 400 });
 
-  const entity = await prisma.entity.findUniqueOrThrow({ where: { id: entityId } });
+  const firm = await prisma.firm.findUniqueOrThrow({ where: { id: firmId } });
 
   try {
     const event = await createCalendarEvent({
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     const meeting = await prisma.meeting.create({
       data: {
-        entityId,
+        firmId,
         contactId: contactId ?? null,
         adHocRecipientName: contactId ? null : adHocName,
         adHocRecipientEmail: contactId ? null : adHocEmail,
@@ -71,10 +71,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await prisma.activityLog.create({ data: { entityId, contactId, type: "meeting", body: `Meeting scheduled: "${title}"`, createdById: user!.id } });
-    await prisma.entityStage.update({ where: { entityId }, data: { stage: "meeting_scheduled", stageChangedAt: new Date() } });
-    await prisma.activityLog.create({ data: { entityId, type: "stage_change", body: "Stage changed to meeting_scheduled", createdById: user!.id } });
-    await completePendingTask(entityId, entity.name, "schedule_meeting");
+    await prisma.activityLog.create({ data: { firmId, contactId, type: "meeting", body: `Meeting scheduled: "${title}"`, createdById: user!.id } });
+    await prisma.crmStageRow.update({ where: { firmId }, data: { stage: "meeting_scheduled", stageChangedAt: new Date() } });
+    await prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Stage changed to meeting_scheduled", createdById: user!.id } });
+    await completePendingTask(firmId, firm.name, "schedule_meeting");
 
     return NextResponse.json({ meeting });
   } catch (e) {

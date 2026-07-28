@@ -12,7 +12,7 @@ import { formatDate, formatDateTime, cn } from "@/lib/utils";
 import { ArrowLeft, Plus, Trash2, Mail, Loader2, ChevronDown } from "lucide-react";
 import { NextStepCell } from "../../crm/_components/next-step-cell";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
-import { AddFirmsModal } from "./_components/add-entities-modal";
+import { AddFirmsModal } from "./_components/add-firms-modal";
 import { AddTaskModal } from "./_components/add-task-modal";
 import { AssignMemberModal } from "./_components/assign-member-modal";
 import { BulkEmailModal } from "./_components/bulk-email-modal";
@@ -22,14 +22,14 @@ import { ProjectMessagesTab } from "./_components/project-messages-tab";
 import { ProjectTaxonomyTab } from "./_components/project-taxonomy-tab";
 
 interface ProjectFirmRow {
-  entityId: string;
-  entity: {
+  firmId: string;
+  firm: {
     id: string;
     name: string;
     hqLocation: string | null;
     strategies: Record<string, string[]>;
     focusAreas: Record<string, string[]>;
-    stage: { stage: CrmStageKey; owner: { id: string; name: string } | null } | null;
+    crmStage: { stage: CrmStageKey; owner: { id: string; name: string } | null } | null;
     contacts: Array<{ id: string; name: string; email: string | null; rank: number }>;
     tasks: Array<{ title: string }>;
     meetings: Array<{ id: string; endTime: string; status: string }>;
@@ -46,7 +46,7 @@ interface TaskRow {
   batchId: string | null;
   owner: { id: string; name: string } | null;
   contact: { id: string; name: string } | null;
-  entity: { id: string; name: string };
+  firm: { id: string; name: string };
   trackerStatus: "not_started" | "in_progress" | "under_review" | "completed" | "blocked";
   progressPercent: number;
   timeSpentMinutes: number;
@@ -64,7 +64,7 @@ interface ProjectDetail {
   dueDate: string | null;
   owner: { id: string; name: string; email: string };
   members: Array<{ userId: string; user: { id: string; name: string; email: string; status: string } }>;
-  entities: ProjectFirmRow[];
+  firms: ProjectFirmRow[];
   tasks: TaskRow[];
   taxonomy: Record<string, string[]> | null;
   taxonomyDescription: string | null;
@@ -77,7 +77,7 @@ interface ActivityRow {
   body: string;
   createdAt: string;
   createdBy: { id: string; name: string } | null;
-  entity: { id: string; name: string };
+  firm: { id: string; name: string };
 }
 
 export default function ProjectDetailPage() {
@@ -120,23 +120,23 @@ export default function ProjectDetailPage() {
 
   const { handleAction, modals } = useNextStepActions(load);
 
-  function toggleFirm(entityId: string) {
+  function toggleFirm(firmId: string) {
     setSelectedFirmIds((prev) => {
       const next = new Set(prev);
-      next.has(entityId) ? next.delete(entityId) : next.add(entityId);
+      next.has(firmId) ? next.delete(firmId) : next.add(firmId);
       return next;
     });
   }
 
-  async function removeFirm(entityId: string) {
-    if (!confirm("Remove this entity from the project? It stays in the Entities Database.")) return;
-    await fetch(`/api/projects/${params.id}/entities/${entityId}`, { method: "DELETE" });
+  async function removeFirm(firmId: string) {
+    if (!confirm("Remove this firm from the project? It stays in the Firms Database.")) return;
+    await fetch(`/api/projects/${params.id}/firms/${firmId}`, { method: "DELETE" });
     load();
   }
 
   async function deleteProject() {
     if (!project) return;
-    if (!confirm(`Delete project "${project.name}"? Entities and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
+    if (!confirm(`Delete project "${project.name}"? Firms and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
     await fetch(`/api/projects/${params.id}`, { method: "DELETE" });
     router.push("/projects");
   }
@@ -170,10 +170,10 @@ export default function ProjectDetailPage() {
   const doneTasks = project.tasks.filter((t) => t.status === "done");
   const now = new Date();
   const upcomingDeadlines = openTasks.filter((t) => t.dueDate).sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
-  const existingFirmIds = project.entities.map((f) => f.entityId);
-  const selectedTargets = project.entities
-    .filter((f) => selectedFirmIds.has(f.entityId))
-    .map((f) => ({ entityId: f.entityId, contactId: f.entity.contacts.find((c) => c.email)?.id, firmName: f.entity.name }));
+  const existingFirmIds = project.firms.map((f) => f.firmId);
+  const selectedTargets = project.firms
+    .filter((f) => selectedFirmIds.has(f.firmId))
+    .map((f) => ({ firmId: f.firmId, contactId: f.firm.contacts.find((c) => c.email)?.id, firmName: f.firm.name }));
 
   return (
     <div className="space-y-4">
@@ -203,7 +203,7 @@ export default function ProjectDetailPage() {
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Entities", value: project.entities.length },
+          { label: "Firms", value: project.firms.length },
           { label: "Open Tasks", value: openTasks.length },
           { label: "Completed Tasks", value: doneTasks.length },
           { label: "Upcoming Deadlines", value: upcomingDeadlines.length },
@@ -225,11 +225,11 @@ export default function ProjectDetailPage() {
               onClick={() => setMoreMenuOpen((o) => !o)}
               className={cn(
                 "flex items-center gap-1 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-secondary hover:text-text-primary",
-                ["entities", "taxonomy", "members"].includes(activeTab) && "border-primary text-primary"
+                ["firms", "taxonomy", "members"].includes(activeTab) && "border-primary text-primary"
               )}
             >
-              {activeTab === "entities"
-                ? `Entities (${project.entities.length})`
+              {activeTab === "firms"
+                ? `Firms (${project.firms.length})`
                 : activeTab === "taxonomy"
                   ? "Taxonomy"
                   : activeTab === "members"
@@ -243,12 +243,12 @@ export default function ProjectDetailPage() {
                 <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-md border border-border bg-surface p-1 shadow-lg">
                   <button
                     onClick={() => {
-                      setActiveTab("entities");
+                      setActiveTab("firms");
                       setMoreMenuOpen(false);
                     }}
                     className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm text-text-primary hover:bg-page"
                   >
-                    Entities ({project.entities.length})
+                    Firms ({project.firms.length})
                   </button>
                   <button
                     onClick={() => {
@@ -286,7 +286,7 @@ export default function ProjectDetailPage() {
                     return (
                       <div key={t.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
                         <span className="text-text-primary">
-                          {t.title} <span className="text-text-secondary">— {t.entity.name}</span>
+                          {t.title} <span className="text-text-secondary">— {t.firm.name}</span>
                         </span>
                         {overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : <span className="text-xs text-text-secondary">{formatDate(t.dueDate)}</span>}
                       </div>
@@ -301,7 +301,7 @@ export default function ProjectDetailPage() {
                   {activity.map((a) => (
                     <div key={a.id} className="border-b border-border py-2 text-sm last:border-0">
                       <p className="text-text-primary">
-                        {a.body} <span className="text-text-secondary">— {a.entity.name}</span>
+                        {a.body} <span className="text-text-secondary">— {a.firm.name}</span>
                       </p>
                       <p className="text-xs text-text-secondary">
                         {formatDateTime(a.createdAt)} {a.createdBy ? `· ${a.createdBy.name}` : ""}
@@ -318,11 +318,11 @@ export default function ProjectDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="entities">
+        <TabsContent value="firms">
           <div className="space-y-3 pt-4">
             <div className="flex items-center justify-between">
               <Button size="sm" variant="outline" onClick={() => setAddFirmsOpen(true)}>
-                <Plus className="h-3.5 w-3.5" /> Add Entities
+                <Plus className="h-3.5 w-3.5" /> Add Firms
               </Button>
               {selectedFirmIds.size > 0 && (
                 <Button size="sm" onClick={() => setBulkEmailOpen(true)}>
@@ -335,7 +335,7 @@ export default function ProjectDetailPage() {
                 <thead>
                   <tr>
                     <th className="w-8"></th>
-                    <th>Entity</th>
+                    <th>Firm</th>
                     <th>Strategy</th>
                     <th>Focus Areas</th>
                     <th>Stage</th>
@@ -344,49 +344,49 @@ export default function ProjectDetailPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {project.entities.length === 0 && (
+                  {project.firms.length === 0 && (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-text-secondary">
-                        No entities in this project yet.
+                        No firms in this project yet.
                       </td>
                     </tr>
                   )}
-                  {project.entities.map(({ entity }) => (
-                    <tr key={entity.id}>
+                  {project.firms.map(({ firm }) => (
+                    <tr key={firm.id}>
                       <td>
-                        <Checkbox checked={selectedFirmIds.has(entity.id)} onCheckedChange={() => toggleFirm(entity.id)} />
+                        <Checkbox checked={selectedFirmIds.has(firm.id)} onCheckedChange={() => toggleFirm(firm.id)} />
                       </td>
                       <td className="font-medium text-text-primary">
-                        <a href={`/entities?open=${entity.id}`} className="hover:underline">
-                          {entity.name}
+                        <a href={`/firms?open=${firm.id}`} className="hover:underline">
+                          {firm.name}
                         </a>
                       </td>
                       <td className="max-w-[160px]">
                         <div className="flex flex-wrap gap-1">
-                          {Object.values(entity.strategies ?? {}).flat().slice(0, 3).map((s) => (
+                          {Object.values(firm.strategies ?? {}).flat().slice(0, 3).map((s) => (
                             <Pill key={s} color="gray">
                               {s}
                             </Pill>
                           ))}
-                          {Object.values(entity.strategies ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
+                          {Object.values(firm.strategies ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
                         </div>
                       </td>
                       <td className="max-w-[160px]">
                         <div className="flex flex-wrap gap-1">
-                          {Object.values(entity.focusAreas ?? {}).flat().slice(0, 3).map((s) => (
+                          {Object.values(firm.focusAreas ?? {}).flat().slice(0, 3).map((s) => (
                             <Pill key={s} color="gray">
                               {s}
                             </Pill>
                           ))}
-                          {Object.values(entity.focusAreas ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
+                          {Object.values(firm.focusAreas ?? {}).flat().length === 0 && <span className="text-text-secondary">—</span>}
                         </div>
                       </td>
-                      <td>{entity.stage && <Pill color={STAGE_COLORS[entity.stage.stage]}>{STAGE_LABELS[entity.stage.stage]}</Pill>}</td>
+                      <td>{firm.crmStage && <Pill color={STAGE_COLORS[firm.crmStage.stage]}>{STAGE_LABELS[firm.crmStage.stage]}</Pill>}</td>
                       <td>
-                        <NextStepCell entity={entity} onAction={handleAction} />
+                        <NextStepCell firm={firm} onAction={handleAction} />
                       </td>
                       <td>
-                        <button onClick={() => removeFirm(entity.id)} className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red">
+                        <button onClick={() => removeFirm(firm.id)} className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </td>
@@ -401,7 +401,7 @@ export default function ProjectDetailPage() {
         <TabsContent value="tasks">
           <div className="space-y-3 pt-4">
             {canManageSettings ? (
-              <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)} disabled={project.entities.length === 0}>
+              <Button size="sm" variant="outline" onClick={() => setAddTaskOpen(true)} disabled={project.firms.length === 0}>
                 <Plus className="h-3.5 w-3.5" /> Add Task
               </Button>
             ) : (
@@ -416,7 +416,7 @@ export default function ProjectDetailPage() {
                   <tr>
                     <th className="w-8"></th>
                     <th>Task</th>
-                    <th>Entity</th>
+                    <th>Firm</th>
                     <th>Contact</th>
                     <th>Priority</th>
                     <th>Progress</th>
@@ -454,7 +454,7 @@ export default function ProjectDetailPage() {
                           {t.title}
                           {t.isFromTemplate && <Pill color="gray" className="ml-2">CRM Action</Pill>}
                         </td>
-                        <td className="text-accent">{t.entity.name}</td>
+                        <td className="text-accent">{t.firm.name}</td>
                         <td className="text-text-secondary">{t.contact?.name ?? "—"}</td>
                         <td>
                           <Pill color={t.priority === "high" ? "red" : t.priority === "low" ? "gray" : "amber"}>{t.priority}</Pill>
@@ -486,7 +486,7 @@ export default function ProjectDetailPage() {
         <TabsContent value="actions">
           <ActionsTab
             projectId={project.id}
-            entities={project.entities.map((f) => f.entity)}
+            firms={project.firms.map((f) => f.firm)}
             members={project.members.map((m) => ({ id: m.userId, name: m.user.name }))}
             handleAction={handleAction}
             onDone={load}
@@ -536,7 +536,7 @@ export default function ProjectDetailPage() {
         open={addTaskOpen}
         onOpenChange={setAddTaskOpen}
         projectId={project.id}
-        entities={project.entities.map((f) => f.entity)}
+        firms={project.firms.map((f) => f.firm)}
         members={project.members.map((m) => ({ id: m.userId, name: m.user.name }))}
         onAdded={load}
       />

@@ -9,12 +9,12 @@ import { Loader2 } from "lucide-react";
 export function AddContactModal({
   open,
   onOpenChange,
-  entityId,
+  firmId,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  entityId: string | null;
+  firmId: string | null;
   onAdded: () => void;
 }) {
   const [name, setName] = useState("");
@@ -35,11 +35,11 @@ export function AddContactModal({
   }, [open]);
 
   async function submit() {
-    if (!entityId || !name.trim()) return;
+    if (!firmId || !name.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/entities/${entityId}/contacts`, {
+      const res = await fetch(`/api/firms/${firmId}/contacts`, {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),

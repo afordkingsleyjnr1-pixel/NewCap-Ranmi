@@ -23,9 +23,9 @@ interface AddFirmSummary {
 }
 
 interface CriteriaResult {
-  entitiesFound: number;
-  entitiesAdded: number;
-  entitiesSkippedDuplicate: number;
+  firmsFound: number;
+  firmsAdded: number;
+  firmsSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
   researchWarnings?: string[];
 }
@@ -61,10 +61,10 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
   function handleProgressEvent(event: { type: string; [k: string]: unknown }) {
     if (typeof event.message !== "string") return;
     setProgressFirm((prevFirm) => {
-      const { entity, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
-      if (entity !== prevFirm && prevFirm !== null) setFirmsDone((n) => n + 1);
-      setProgressStep((prevStep) => (entity !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
-      return entity;
+      const { firm, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
+      if (firm !== prevFirm && prevFirm !== null) setFirmsDone((n) => n + 1);
+      setProgressStep((prevStep) => (firm !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
+      return firm;
     });
   }
 
@@ -75,10 +75,10 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
     setProgressStep(0);
     setFirmsDone(0);
     try {
-      const res = await fetch("/api/entities", { method: "POST", body: JSON.stringify({ names }) });
+      const res = await fetch("/api/firms", { method: "POST", body: JSON.stringify({ names }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to add entities");
+        throw new Error(data.error ?? "Failed to add firms");
       }
       const data = await readNdjsonStream<AddFirmSummary>(res, handleProgressEvent);
       setNameResult(data);
@@ -148,10 +148,10 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
     <Modal
       open={open}
       onOpenChange={close}
-      title="Add Entity"
+      title="Add Firm"
       description={
         mode === "by_name"
-          ? "Type one or more entity names — the platform researches everything else."
+          ? "Type one or more firm names — the platform researches everything else."
           : "Describe the kind of manager you're looking for — the platform searches for and adds matches."
       }
       widthClassName="max-w-xl"
@@ -211,7 +211,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                 </div>
               </div>
               <div>
-                <Label>Number of entities to add</Label>
+                <Label>Number of firms to add</Label>
                 <Input
                   type="number"
                   min={1}
@@ -220,7 +220,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
                   onChange={(e) => setTargetCount(e.target.value)}
                   className="w-24"
                 />
-                <p className="mt-1 text-xs text-text-secondary">How many new entities to search for and add in this run (1–50).</p>
+                <p className="mt-1 text-xs text-text-secondary">How many new firms to search for and add in this run (1–50).</p>
               </div>
               <p className="text-xs text-text-secondary">
                 The platform searches for managers matching this brief, skips anything already in the database, and runs
@@ -234,7 +234,7 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
               <p className="mb-1 text-center text-xs font-medium text-text-primary">
                 {progressFirm ? (
                   <>
-                    {mode === "by_name" && namesCount > 1 ? `Entity ${Math.min(firmsDone + 1, namesCount)} of ${namesCount}: ` : ""}
+                    {mode === "by_name" && namesCount > 1 ? `Firm ${Math.min(firmsDone + 1, namesCount)} of ${namesCount}: ` : ""}
                     {progressFirm}
                   </>
                 ) : (
@@ -318,9 +318,9 @@ export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; on
         criteriaResult && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Pill color="blue">{criteriaResult.entitiesFound} candidates found</Pill>
-              <Pill color="green">{criteriaResult.entitiesAdded} new entities added</Pill>
-              <Pill color="gray">{criteriaResult.entitiesSkippedDuplicate} skipped as duplicates</Pill>
+              <Pill color="blue">{criteriaResult.firmsFound} candidates found</Pill>
+              <Pill color="green">{criteriaResult.firmsAdded} new firms added</Pill>
+              <Pill color="gray">{criteriaResult.firmsSkippedDuplicate} skipped as duplicates</Pill>
             </div>
             {criteriaResult.addedFirms.length > 0 && (
               <ul className="max-h-48 overflow-y-auto text-sm text-text-primary">

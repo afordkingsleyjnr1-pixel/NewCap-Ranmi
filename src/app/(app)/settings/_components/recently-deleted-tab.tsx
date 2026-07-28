@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 export function RecentlyDeletedTab() {
-  const [entities, setFirms] = useState<any[]>([]);
+  const [firms, setFirms] = useState<any[]>([]);
 
   async function load() {
-    const res = await fetch("/api/entities?includeDeleted=true");
+    const res = await fetch("/api/firms?includeDeleted=true");
     const data = await res.json();
-    setFirms((data.entities ?? []).filter((f: any) => f.deletedAt));
+    setFirms((data.firms ?? []).filter((f: any) => f.deletedAt));
   }
 
   useEffect(() => {
@@ -17,7 +17,7 @@ export function RecentlyDeletedTab() {
   }, []);
 
   async function restore(id: string) {
-    await fetch(`/api/entities/${id}/restore`, { method: "POST" });
+    await fetch(`/api/firms/${id}/restore`, { method: "POST" });
     load();
   }
 
@@ -29,14 +29,14 @@ export function RecentlyDeletedTab() {
     ) {
       return;
     }
-    await fetch(`/api/entities/${id}/purge`, { method: "DELETE" });
+    await fetch(`/api/firms/${id}/purge`, { method: "DELETE" });
     load();
   }
 
   return (
     <div className="space-y-2">
-      {entities.length === 0 && <p className="text-sm text-text-secondary">Nothing deleted.</p>}
-      {entities.map((f) => (
+      {firms.length === 0 && <p className="text-sm text-text-secondary">Nothing deleted.</p>}
+      {firms.map((f) => (
         <div key={f.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2.5 text-sm">
           <span className="text-text-primary">{f.name}</span>
           <div className="flex gap-2">

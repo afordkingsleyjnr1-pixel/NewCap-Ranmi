@@ -141,12 +141,12 @@ async function syncGmailConnection(connection: { userId: string; connectedEmail:
 async function discoverNewGmailThreads(connection: { userId: string; connectedEmail: string }, gmail: gmail_v1.Gmail) {
   const contacts = await prisma.contact.findMany({
     where: { removedAt: null, OR: [{ email: { not: null } }, { NOT: { alternateEmails: { isEmpty: true } } }] },
-    select: { id: true, entityId: true, email: true, alternateEmails: true },
+    select: { id: true, firmId: true, email: true, alternateEmails: true },
   });
-  const emailToContact = new Map<string, { id: string; entityId: string }>();
+  const emailToContact = new Map<string, { id: string; firmId: string }>();
   for (const c of contacts) {
-    if (c.email) emailToContact.set(c.email.toLowerCase(), { id: c.id, entityId: c.entityId });
-    for (const alt of c.alternateEmails) emailToContact.set(alt.toLowerCase(), { id: c.id, entityId: c.entityId });
+    if (c.email) emailToContact.set(c.email.toLowerCase(), { id: c.id, firmId: c.firmId });
+    for (const alt of c.alternateEmails) emailToContact.set(alt.toLowerCase(), { id: c.id, firmId: c.firmId });
   }
   if (emailToContact.size === 0) return;
 
@@ -190,7 +190,7 @@ async function discoverNewGmailThreads(connection: { userId: string; connectedEm
         fromEmail,
         fromName,
         contactId: contactMatch.id,
-        entityId: contactMatch.entityId,
+        firmId: contactMatch.firmId,
         notifyUserId: connection.userId,
         providerThreadId: t.id,
         providerMessageId: firstInbound.id,
@@ -269,12 +269,12 @@ async function fetchOutlookAttachments(
 async function discoverNewOutlookThreads(connection: { userId: string; connectedEmail: string }, client: Client) {
   const contacts = await prisma.contact.findMany({
     where: { removedAt: null, OR: [{ email: { not: null } }, { NOT: { alternateEmails: { isEmpty: true } } }] },
-    select: { id: true, entityId: true, email: true, alternateEmails: true },
+    select: { id: true, firmId: true, email: true, alternateEmails: true },
   });
-  const emailToContact = new Map<string, { id: string; entityId: string }>();
+  const emailToContact = new Map<string, { id: string; firmId: string }>();
   for (const c of contacts) {
-    if (c.email) emailToContact.set(c.email.toLowerCase(), { id: c.id, entityId: c.entityId });
-    for (const alt of c.alternateEmails) emailToContact.set(alt.toLowerCase(), { id: c.id, entityId: c.entityId });
+    if (c.email) emailToContact.set(c.email.toLowerCase(), { id: c.id, firmId: c.firmId });
+    for (const alt of c.alternateEmails) emailToContact.set(alt.toLowerCase(), { id: c.id, firmId: c.firmId });
   }
   if (emailToContact.size === 0) return;
 
@@ -325,7 +325,7 @@ async function discoverNewOutlookThreads(connection: { userId: string; connected
       fromEmail,
       fromName: msg.from?.emailAddress?.name ?? null,
       contactId: contactMatch.id,
-      entityId: contactMatch.entityId,
+      firmId: contactMatch.firmId,
       notifyUserId: connection.userId,
       providerThreadId: conversationId,
       providerMessageId: msg.id,

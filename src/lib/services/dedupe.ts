@@ -35,44 +35,44 @@ function similarity(a: string, b: string): number {
 }
 
 export interface DedupeMatch {
-  entityId: string;
+  firmId: string;
   name: string;
   reason: "exact_name" | "domain" | "fuzzy_name";
   deleted: boolean;
 }
 
 /**
- * Checks a candidate entity name/domain against every existing entity (including
- * soft-deleted ones — Section 5.6, "dedupe still checks against soft-deleted entities").
+ * Checks a candidate firm name/domain against every existing firm (including
+ * soft-deleted ones — Section 5.6, "dedupe still checks against soft-deleted firms").
  */
 export async function findDuplicate(params: { name: string; domain?: string | null }): Promise<DedupeMatch | null> {
-  const candidates = await prisma.entity.findMany({
+  const candidates = await prisma.firm.findMany({
     select: { id: true, name: true, domain: true, deletedAt: true },
   });
 
   const targetNorm = normalizeName(params.name);
   const targetDomain = params.domain?.toLowerCase().replace(/^www\./, "") ?? null;
 
-  for (const entity of candidates) {
-    if (entity.name.toLowerCase() === params.name.toLowerCase()) {
-      return { entityId: entity.id, name: entity.name, reason: "exact_name", deleted: !!entity.deletedAt };
+  for (const firm of candidates) {
+    if (firm.name.toLowerCase() === params.name.toLowerCase()) {
+      return { firmId: firm.id, name: firm.name, reason: "exact_name", deleted: !!firm.deletedAt };
     }
   }
 
   if (targetDomain) {
-    for (const entity of candidates) {
-      const firmDomain = entity.domain?.toLowerCase().replace(/^www\./, "") ?? null;
+    for (const firm of candidates) {
+      const firmDomain = firm.domain?.toLowerCase().replace(/^www\./, "") ?? null;
       if (firmDomain && firmDomain === targetDomain) {
-        return { entityId: entity.id, name: entity.name, reason: "domain", deleted: !!entity.deletedAt };
+        return { firmId: firm.id, name: firm.name, reason: "domain", deleted: !!firm.deletedAt };
       }
     }
   }
 
-  for (const entity of candidates) {
-    const firmNorm = normalizeName(entity.name);
+  for (const firm of candidates) {
+    const firmNorm = normalizeName(firm.name);
     if (firmNorm.length === 0 || targetNorm.length === 0) continue;
     if (similarity(targetNorm, firmNorm) >= 0.88) {
-      return { entityId: entity.id, name: entity.name, reason: "fuzzy_name", deleted: !!entity.deletedAt };
+      return { firmId: firm.id, name: firm.name, reason: "fuzzy_name", deleted: !!firm.deletedAt };
     }
   }
 

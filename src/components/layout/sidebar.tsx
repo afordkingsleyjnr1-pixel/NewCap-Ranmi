@@ -20,7 +20,7 @@ const NAV_ITEMS = [
   { href: "/messages", label: "Messages", icon: Mail },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/crm", label: "CRM Pipeline", icon: KanbanSquare },
-  { href: "/entities", label: "Entities Database", icon: Building2 },
+  { href: "/firms", label: "Firms Database", icon: Building2 },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

@@ -1,5 +1,5 @@
 // Streams progress events to the client while a long-running research
-// pipeline runs (Add Entity, Populate), instead of leaving the request bar
+// pipeline runs (Add Firm, Populate), instead of leaving the request bar
 // looking frozen for 10-30+ seconds. Each line is one JSON object; the
 // stream always ends with either {"type":"done","result":...} or
 // {"type":"error","error":...}. Auth/permission failures happen before this

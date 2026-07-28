@@ -24,23 +24,23 @@ export async function POST(req: Request) {
   let movedToNoResponse = 0;
 
   const emailSentThreads = await prisma.emailThread.findMany({
-    where: { status: "awaiting_reply", followUpSentAt: null, lastActivityAt: { lte: cutoff }, isFreeForm: false, entityId: { not: null } },
-    include: { entity: { include: { stage: true } } },
+    where: { status: "awaiting_reply", followUpSentAt: null, lastActivityAt: { lte: cutoff }, isFreeForm: false, firmId: { not: null } },
+    include: { firm: { include: { crmStage: true } } },
   });
   for (const t of emailSentThreads) {
-    const entityId = t.entityId;
-    if (!t.entity || !entityId) continue;
-    if (t.entity.stage?.stage === "email_sent") {
-      await prisma.entityStage.update({ where: { entityId } , data: { stage: "follow_up_due", stageChangedAt: new Date() } });
-      await prisma.activityLog.create({ data: { entityId, type: "stage_change", body: "Auto-flagged: Follow-Up Due (no reply within threshold)" } });
-      await createPendingTask(entityId, t.entity.name, "send_follow_up");
-      const owner = t.entity.stage?.ownerId;
+    const firmId = t.firmId;
+    if (!t.firm || !firmId) continue;
+    if (t.firm.crmStage?.stage === "email_sent") {
+      await prisma.crmStageRow.update({ where: { firmId } , data: { stage: "follow_up_due", stageChangedAt: new Date() } });
+      await prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Auto-flagged: Follow-Up Due (no reply within threshold)" } });
+      await createPendingTask(firmId, t.firm.name, "send_follow_up");
+      const owner = t.firm.crmStage?.ownerId;
       if (owner) {
         await createNotification({
           userId: owner,
           type: "follow_up_due",
-          relatedFirmId: entityId,
-          body: `Follow-up is due for ${t.entity.name}`,
+          relatedFirmId: firmId,
+          body: `Follow-up is due for ${t.firm.name}`,
         });
       }
       movedToFollowUp++;
@@ -48,17 +48,17 @@ export async function POST(req: Request) {
   }
 
   const followedUpThreads = await prisma.emailThread.findMany({
-    where: { status: "awaiting_reply", followUpSentAt: { lte: cutoff }, isFreeForm: false, entityId: { not: null } },
-    include: { entity: { include: { stage: true } } },
+    where: { status: "awaiting_reply", followUpSentAt: { lte: cutoff }, isFreeForm: false, firmId: { not: null } },
+    include: { firm: { include: { crmStage: true } } },
   });
   for (const t of followedUpThreads) {
-    const entityId = t.entityId;
-    if (!t.entity || !entityId) continue;
-    if (t.entity.stage?.stage === "follow_up_sent") {
+    const firmId = t.firmId;
+    if (!t.firm || !firmId) continue;
+    if (t.firm.crmStage?.stage === "follow_up_sent") {
       await prisma.$transaction([
         prisma.emailThread.update({ where: { id: t.id }, data: { status: "no_response" } }),
-        prisma.entityStage.update({ where: { entityId } , data: { stage: "no_response", stageChangedAt: new Date() } }),
-        prisma.activityLog.create({ data: { entityId, type: "stage_change", body: "Auto-flagged: No Response (follow-up threshold passed)" } }),
+        prisma.crmStageRow.update({ where: { firmId } , data: { stage: "no_response", stageChangedAt: new Date() } }),
+        prisma.activityLog.create({ data: { firmId, type: "stage_change", body: "Auto-flagged: No Response (follow-up threshold passed)" } }),
       ]);
       movedToNoResponse++;
     }

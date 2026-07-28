@@ -34,7 +34,7 @@ interface TaskDetail {
   timeSpentMinutes: number;
   completionVerifiedBy: { id: string; name: string } | null;
   completionVerifiedAt: string | null;
-  entity: { id: string; name: string };
+  firm: { id: string; name: string };
 }
 
 interface CommentRow {

@@ -11,15 +11,15 @@ interface ThreadRow {
   subject: string;
   hasUnreadReply: boolean;
   lastActivityAt: string;
-  entity: { id: string; name: string } | null;
+  firm: { id: string; name: string } | null;
   contact: { id: string; name: string } | null;
   adHocRecipientName: string | null;
   messages: Array<{ body: string }>;
 }
 
-// Project-scoped Messages — every thread whose entity is attached to this
+// Project-scoped Messages — every thread whose firm is attached to this
 // project, automatically (no manual tagging), same association rule as
-// the Entity Database's project filter. Read-only summary here; opening a
+// the Firm Database's project filter. Read-only summary here; opening a
 // thread goes to the full main Messages reader.
 //
 // `compact` renders a tighter list (smaller text, no outer padding) for use
@@ -49,7 +49,7 @@ export function ProjectMessagesTab({ projectId, compact = false, limit }: { proj
 
   return (
     <div className={cn("space-y-2", !compact && "pt-4")}>
-      {shown.length === 0 && <p className="text-sm text-text-secondary">No messages yet for entities in this project.</p>}
+      {shown.length === 0 && <p className="text-sm text-text-secondary">No messages yet for firms in this project.</p>}
       <div className="rounded-lg border border-border bg-surface">
         {shown.map((t) => (
           <Link
@@ -68,7 +68,7 @@ export function ProjectMessagesTab({ projectId, compact = false, limit }: { proj
                 {t.hasUnreadReply && <Pill color="blue">Unread</Pill>}
               </div>
               <p className="truncate text-xs text-text-secondary">
-                {t.entity?.name ?? t.contact?.name ?? t.adHocRecipientName ?? "Unknown"}
+                {t.firm?.name ?? t.contact?.name ?? t.adHocRecipientName ?? "Unknown"}
                 {!compact && ` — ${t.messages[t.messages.length - 1]?.body.replace(/\s+/g, " ").slice(0, 120)}`}
               </p>
             </div>

@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const task = await prisma.task.update({ where: { id }, data });
 
   if (body.status === "done") {
-    await prisma.activityLog.create({ data: { entityId: task.entityId, type: "note", body: `Task completed: "${task.title}"`, createdById: user!.id, deletable: false } });
+    await prisma.activityLog.create({ data: { firmId: task.firmId, type: "note", body: `Task completed: "${task.title}"`, createdById: user!.id, deletable: false } });
   }
   for (const note of systemNotes) {
     await prisma.taskComment.create({ data: { taskId: id, body: note, isSystem: true, createdById: user!.id } });

@@ -7,7 +7,7 @@ import { Input, Label } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 
 // Section 5 — "Meeting Scheduled": once the meeting's time has passed, the
-// user picks one of three outcomes. Reschedule keeps the entity at Meeting
+// user picks one of three outcomes. Reschedule keeps the firm at Meeting
 // Scheduled with a new time; the other two advance the pipeline.
 export function MeetingOutcomeModal({
   open,

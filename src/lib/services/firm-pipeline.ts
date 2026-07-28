@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { researchFirmCore } from "./entity-core-research";
+import { researchFirmCore } from "./firm-core-research";
 import { findEmail, isHunterConfigured } from "./hunter";
 import { isAnthropicConfigured } from "@/lib/anthropic";
 import { getMandateSettings, deriveWithinMandate } from "./mandate";
@@ -7,13 +7,13 @@ import { createPendingTask } from "./pipeline-tasks";
 import type { SourceType } from "@/generated/prisma";
 
 export interface PipelineOutcome {
-  entityId: string;
+  firmId: string;
   name: string;
   domainResolutionStatus: "resolved" | "ambiguous" | "unresolved";
   classificationStatus: "classified" | "needs_review";
   primaryContactFound: boolean;
   aumValue: number | null;
-  /** Non-null if an AI/Hunter call failed partway through — the entity is still
+  /** Non-null if an AI/Hunter call failed partway through — the firm is still
    * created with whatever succeeded, but the caller can surface this so a
    * billing/rate-limit/API error doesn't look like a silent no-op. */
   researchWarning: string | null;
@@ -23,8 +23,8 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Unknown error";
 }
 
-// Defense in depth alongside the validation in entity-core-research.ts — an
-// invalid Date passed to Prisma throws and aborts the whole entity.create()
+// Defense in depth alongside the validation in firm-core-research.ts — an
+// invalid Date passed to Prisma throws and aborts the whole firm.create()
 // call, so this must never construct one from an unvalidated string.
 function safeDate(value: string | null): Date | null {
   if (!value) return null;
@@ -33,26 +33,26 @@ function safeDate(value: string | null): Date | null {
 }
 
 /**
- * The single shared research pipeline behind Add Entity (5.1) and every candidate
+ * The single shared research pipeline behind Add Firm (5.1) and every candidate
  * Populate surfaces (5.10): one combined domain+AUM+classification+contacts
  * research call → Hunter email enrichment. Writes research_sources rows
  * throughout so every field stays traceable (Section 4.5).
  *
  * Domain/AUM/classification/contacts are one Claude call (see
- * entity-core-research.ts) rather than four, to share a single web_search
+ * firm-core-research.ts) rather than four, to share a single web_search
  * budget instead of each step paying for its own — search calls are billed
  * per-use independent of token cost, so this is the main cost lever.
  *
- * `onProgress` is optional — the streaming Add Entity endpoint passes it to
+ * `onProgress` is optional — the streaming Add Firm endpoint passes it to
  * surface live status to the UI; callers that don't care (Populate,
  * reclassify) simply omit it.
  *
  * Each AI-dependent step still degrades independently — a billing error,
  * rate limit, or transient API failure never blocks the others or crashes
- * the whole pipeline; the entity is still created with whatever succeeded,
+ * the whole pipeline; the firm is still created with whatever succeeded,
  * flagged needs_review/unresolved where it didn't, and the first failure
  * message is returned as `researchWarning` so it's visible instead of
- * looking like the entity was silently researched with blank data.
+ * looking like the firm was silently researched with blank data.
  */
 export async function runFirmResearchPipeline(params: {
   name: string;
@@ -65,7 +65,7 @@ export async function runFirmResearchPipeline(params: {
 
   if (!isAnthropicConfigured()) {
     emit(`${params.name}: no Anthropic API key configured — adding without research.`);
-    const entity = await prisma.entity.create({
+    const firm = await prisma.firm.create({
       data: {
         name: params.name,
         sourceType: params.sourceType,
@@ -73,13 +73,13 @@ export async function runFirmResearchPipeline(params: {
         classificationStatus: "needs_review",
         populateRunId: params.populateRunId ?? null,
         similarTo: params.similarToFirmId ? [params.similarToFirmId] : [],
-        stage: { create: { stage: "not_contacted" } },
+        crmStage: { create: { stage: "not_contacted" } },
       },
     });
-    await createPendingTask(entity.id, entity.name, "send_email");
+    await createPendingTask(firm.id, firm.name, "send_email");
     return {
-      entityId: entity.id,
-      name: entity.name,
+      firmId: firm.id,
+      name: firm.name,
       domainResolutionStatus: "unresolved",
       classificationStatus: "needs_review",
       primaryContactFound: false,
@@ -114,9 +114,9 @@ export async function runFirmResearchPipeline(params: {
         `AUM ${core.aumDisplay}, ${Object.keys(core.strategies).length + Object.keys(core.focusAreas).length ? "classified" : "needs review"}.`
     );
     if (core.domainStatus !== "resolved") {
-      researchWarning = `Domain could not be confidently resolved (${core.domainStatus}) — contacts and email lookup were skipped. Confirm the domain manually in the entity drawer, then run Find Contact.`;
+      researchWarning = `Domain could not be confidently resolved (${core.domainStatus}) — contacts and email lookup were skipped. Confirm the domain manually in the firm drawer, then run Find Contact.`;
     } else if (core.contacts.length === 0) {
-      researchWarning = "No public contact information was found for this entity. Use Add Contact in the entity drawer to enter one manually.";
+      researchWarning = "No public contact information was found for this firm. Use Add Contact in the firm drawer to enter one manually.";
     }
   } catch (e) {
     researchWarning = `Research failed: ${errorMessage(e)}`;
@@ -126,8 +126,8 @@ export async function runFirmResearchPipeline(params: {
   const band = await getMandateSettings();
   const withinMandate = deriveWithinMandate(core.aumValue, { aumMin: Number(band.aumMin), aumMax: Number(band.aumMax) });
 
-  emit(`${params.name}: saving entity record…`);
-  const entity = await prisma.entity.create({
+  emit(`${params.name}: saving firm record…`);
+  const firm = await prisma.firm.create({
     data: {
       name: params.name,
       domain: core.domain,
@@ -146,15 +146,15 @@ export async function runFirmResearchPipeline(params: {
       sourceType: params.sourceType,
       populateRunId: params.populateRunId ?? null,
       similarTo: params.similarToFirmId ? [params.similarToFirmId] : [],
-      stage: { create: { stage: "not_contacted" } },
+      crmStage: { create: { stage: "not_contacted" } },
     },
   });
 
-  await createPendingTask(entity.id, entity.name, "send_email");
+  await createPendingTask(firm.id, firm.name, "send_email");
 
   if (core.aumSourceDescription) {
     await prisma.researchSource.create({
-      data: { entityType: "entity", entityId: entity.id, fieldName: "aum_value", sourceUrlOrDescription: core.aumSourceDescription },
+      data: { entityType: "firm", entityId: firm.id, fieldName: "aum_value", sourceUrlOrDescription: core.aumSourceDescription },
     });
   }
 
@@ -162,8 +162,8 @@ export async function runFirmResearchPipeline(params: {
     for (const child of children) {
       await prisma.researchSource.create({
         data: {
-          entityType: "entity",
-          entityId: entity.id,
+          entityType: "firm",
+          entityId: firm.id,
           fieldName: `strategies.${parent}.${child}`,
           sourceUrlOrDescription: `Classification Engine — ${parent} / ${child}`,
         },
@@ -174,8 +174,8 @@ export async function runFirmResearchPipeline(params: {
     for (const child of children) {
       await prisma.researchSource.create({
         data: {
-          entityType: "entity",
-          entityId: entity.id,
+          entityType: "firm",
+          entityId: firm.id,
           fieldName: `focus_areas.${parent}.${child}`,
           sourceUrlOrDescription: `Classification Engine — ${parent} / ${child}`,
         },
@@ -192,7 +192,7 @@ export async function runFirmResearchPipeline(params: {
     for (const c of core.contacts) {
       const contact = await prisma.contact.create({
         data: {
-          entityId: entity.id,
+          firmId: firm.id,
           name: c.name,
           title: c.title,
           linkedinUrl: c.linkedinUrl,
@@ -242,8 +242,8 @@ export async function runFirmResearchPipeline(params: {
   emit(`${params.name}: done.`);
 
   return {
-    entityId: entity.id,
-    name: entity.name,
+    firmId: firm.id,
+    name: firm.name,
     domainResolutionStatus: core.domainStatus,
     classificationStatus: core.classificationStatus,
     primaryContactFound,

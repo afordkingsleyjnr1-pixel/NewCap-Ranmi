@@ -13,7 +13,7 @@ export interface FirmListItem {
   sourceType: "seed" | "manual_add" | "comparable";
   classificationStatus: "unclassified" | "classified" | "needs_review";
   domainResolutionStatus: "resolved" | "ambiguous" | "unresolved" | null;
-  stage: {
+  crmStage: {
     stage: CrmStageKey;
     nextFollowUpDate: string | null;
     owner: { id: string; name: string } | null;

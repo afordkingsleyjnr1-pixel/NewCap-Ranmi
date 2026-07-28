@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, firmScopeWhere, ForbiddenError } from "@/lib/authz";
 import { findDuplicate } from "@/lib/services/dedupe";
-import { runFirmResearchPipeline } from "@/lib/services/entity-pipeline";
+import { runFirmResearchPipeline } from "@/lib/services/firm-pipeline";
 import { ndjsonResponse } from "@/lib/ndjson-server";
 import { Prisma } from "@/generated/prisma";
 
@@ -41,13 +41,13 @@ export async function GET(req: NextRequest) {
   if (similarToFirmId) where.similarTo = { has: similarToFirmId };
   if (strategyParent) where.strategies = { path: [strategyParent], not: Prisma.JsonNull } as never;
   if (focusParent) where.focusAreas = { path: [focusParent], not: Prisma.JsonNull } as never;
-  if (stage) where.stage = { stage: stage as never };
+  if (stage) where.crmStage = { stage: stage as never };
   if (projectId) where.projectFirms = { some: { projectId } };
 
-  const entities = await prisma.entity.findMany({
+  const firms = await prisma.firm.findMany({
     where,
     include: {
-      stage: { include: { owner: { select: { id: true, name: true } } } },
+      crmStage: { include: { owner: { select: { id: true, name: true } } } },
       contacts: { where: { removedAt: null }, orderBy: { rank: "asc" }, take: 1 },
       tasks: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
       meetings: { where: { status: "scheduled" }, orderBy: { startTime: "desc" }, take: 1 },
@@ -56,17 +56,17 @@ export async function GET(req: NextRequest) {
     take: 500,
   });
 
-  // Relevant Notifications — unread count per entity, for the grid's alert indicator.
+  // Relevant Notifications — unread count per firm, for the grid's alert indicator.
   const unreadCounts = await prisma.notification.groupBy({
     by: ["relatedFirmId"],
-    where: { userId: user.id, isRead: false, relatedFirmId: { in: entities.map((f: { id: string }) => f.id) } },
+    where: { userId: user.id, isRead: false, relatedFirmId: { in: firms.map((f: { id: string }) => f.id) } },
     _count: { _all: true },
   });
   const unreadByFirm = new Map(unreadCounts.map((c: { relatedFirmId: string | null; _count: { _all: number } }) => [c.relatedFirmId, c._count._all]));
 
-  const firmsWithAlerts = entities.map((f: { id: string }) => ({ ...f, unreadNotifications: unreadByFirm.get(f.id) ?? 0 }));
+  const firmsWithAlerts = firms.map((f: { id: string }) => ({ ...f, unreadNotifications: unreadByFirm.get(f.id) ?? 0 }));
 
-  return NextResponse.json({ entities: firmsWithAlerts });
+  return NextResponse.json({ firms: firmsWithAlerts });
 }
 
 export async function POST(req: NextRequest) {
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     .filter(Boolean);
 
   if (names.length === 0) {
-    return NextResponse.json({ error: "Provide at least one entity name" }, { status: 400 });
+    return NextResponse.json({ error: "Provide at least one firm name" }, { status: 400 });
   }
 
   // Streamed as NDJSON so the UI can show live progress instead of one long
@@ -113,9 +113,9 @@ export async function POST(req: NextRequest) {
           onProgress: (message) => send({ type: "progress", message }),
         });
         if (outcome.domainResolutionStatus === "resolved") {
-          added.push({ id: outcome.entityId, name: outcome.name });
+          added.push({ id: outcome.firmId, name: outcome.name });
         } else {
-          needsDomainConfirmation.push({ id: outcome.entityId, name: outcome.name });
+          needsDomainConfirmation.push({ id: outcome.firmId, name: outcome.name });
         }
         if (outcome.researchWarning) {
           researchWarnings.push(`${name}: ${outcome.researchWarning}`);

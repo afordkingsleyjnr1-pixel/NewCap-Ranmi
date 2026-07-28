@@ -15,14 +15,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
     throw e;
   }
-  const { id: entityId } = await params;
+  const { id: firmId } = await params;
   const body = await req.json();
   const stage = body.stage as string;
 
-  const before = await prisma.entityStage.findUniqueOrThrow({ where: { entityId } });
+  const before = await prisma.crmStageRow.findUniqueOrThrow({ where: { firmId } });
 
-  await prisma.entityStage.update({
-    where: { entityId },
+  await prisma.crmStageRow.update({
+    where: { firmId },
     data: {
       stage: stage as never,
       stageChangedAt: new Date(),
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   await prisma.activityLog.create({
     data: {
-      entityId,
+      firmId,
       type: "stage_change",
       body: `Stage changed from ${before.stage} to ${stage}`,
       createdById: user!.id,
@@ -41,14 +41,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Section 5.9 — Term Sheet / LOI entry auto-generates the closing checklist.
   if (stage === "term_sheet_sent" && before.stage !== "term_sheet_sent") {
-    const existingChecklistTasks = await prisma.task.count({ where: { entityId, title: { in: CLOSING_CHECKLIST_TEMPLATE } } });
+    const existingChecklistTasks = await prisma.task.count({ where: { firmId, title: { in: CLOSING_CHECKLIST_TEMPLATE } } });
     if (existingChecklistTasks === 0) {
       await prisma.task.createMany({
-        data: CLOSING_CHECKLIST_TEMPLATE.map((title) => ({ entityId, title, isFromTemplate: true, status: "open" as const })),
+        data: CLOSING_CHECKLIST_TEMPLATE.map((title) => ({ firmId, title, isFromTemplate: true, status: "open" as const })),
       });
     }
   }
 
-  const updated = await prisma.entityStage.findUniqueOrThrow({ where: { entityId } });
-  return NextResponse.json({ stage: updated });
+  const updated = await prisma.crmStageRow.findUniqueOrThrow({ where: { firmId } });
+  return NextResponse.json({ crmStage: updated });
 }

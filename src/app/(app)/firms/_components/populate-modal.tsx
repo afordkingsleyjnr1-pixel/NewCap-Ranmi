@@ -16,9 +16,9 @@ import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
 type Mode = "similar_to_firm" | "by_criteria" | "database_wide";
 
 interface PopulateResult {
-  entitiesFound: number;
-  entitiesAdded: number;
-  entitiesSkippedDuplicate: number;
+  firmsFound: number;
+  firmsAdded: number;
+  firmsSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
   researchWarnings?: string[];
 }
@@ -28,7 +28,7 @@ export function PopulateModal({
   onOpenChange,
   onDone,
   initialMode = "by_criteria",
-  seedEntityId,
+  seedFirmId,
   seedFirmName,
   initialStrategies,
   initialFocusAreas,
@@ -37,7 +37,7 @@ export function PopulateModal({
   onOpenChange: (o: boolean) => void;
   onDone: () => void;
   initialMode?: Mode;
-  seedEntityId?: string;
+  seedFirmId?: string;
   seedFirmName?: string;
   initialStrategies?: Record<string, string[]>;
   initialFocusAreas?: Record<string, string[]>;
@@ -72,9 +72,9 @@ export function PopulateModal({
   function handleProgressEvent(event: { type: string; [k: string]: unknown }) {
     if (typeof event.message !== "string") return;
     setProgressFirm((prevFirm) => {
-      const { entity, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
-      setProgressStep((prevStep) => (entity !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
-      return entity;
+      const { firm, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
+      setProgressStep((prevStep) => (firm !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
+      return firm;
     });
   }
 
@@ -94,7 +94,7 @@ export function PopulateModal({
     setProgressStep(0);
     try {
       const body: Record<string, unknown> = { mode };
-      if (mode === "similar_to_firm") body.seedEntityId = seedEntityId;
+      if (mode === "similar_to_firm") body.seedFirmId = seedFirmId;
       if (mode === "by_criteria") {
         body.criteria = {
           strategies,
@@ -120,7 +120,7 @@ export function PopulateModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Populate — Find Similar Entities" widthClassName="max-w-2xl">
+    <Modal open={open} onOpenChange={onOpenChange} title="Populate — Find Similar Firms" widthClassName="max-w-2xl">
       {!result ? (
         <div className="space-y-4">
           <div className="flex gap-1 rounded-md border border-border bg-page p-1 text-xs font-medium">
@@ -130,14 +130,14 @@ export function PopulateModal({
                 onClick={() => setMode(m)}
                 className={`flex-1 rounded px-2 py-1.5 ${mode === m ? "bg-primary text-white" : "text-text-secondary hover:bg-white"}`}
               >
-                {m === "similar_to_firm" ? "Similar to a Entity" : m === "by_criteria" ? "By Strategy & Focus Area" : "Across Entire Database"}
+                {m === "similar_to_firm" ? "Similar to a Firm" : m === "by_criteria" ? "By Strategy & Focus Area" : "Across Entire Database"}
               </button>
             ))}
           </div>
 
           {mode === "similar_to_firm" && (
             <p className="rounded-md bg-page px-3 py-2 text-sm text-text-primary">
-              Seed entity: <span className="font-medium">{seedFirmName ?? "—"}</span>
+              Seed firm: <span className="font-medium">{seedFirmName ?? "—"}</span>
             </p>
           )}
 
@@ -166,7 +166,7 @@ export function PopulateModal({
                 </div>
               </div>
               <div>
-                <Label>Number of entities to add</Label>
+                <Label>Number of firms to add</Label>
                 <Input
                   type="number"
                   min={1}
@@ -175,7 +175,7 @@ export function PopulateModal({
                   onChange={(e) => setTargetCount(e.target.value)}
                   className="w-24"
                 />
-                <p className="mt-1 text-xs text-text-secondary">How many new entities to search for and add in this run (1–50).</p>
+                <p className="mt-1 text-xs text-text-secondary">How many new firms to search for and add in this run (1–50).</p>
               </div>
               <Button variant="ghost" size="sm" onClick={clearSelection}>
                 Clear Selection
@@ -185,8 +185,8 @@ export function PopulateModal({
 
           {mode === "database_wide" && (
             <p className="rounded-md bg-page px-3 py-2 text-sm text-text-secondary">
-              Runs comparables against your {`10 most recently added`} entities as a representative sample (capped to keep cost bounded
-              regardless of database size), and adds up to 20 new entities per run.
+              Runs comparables against your {`10 most recently added`} firms as a representative sample (capped to keep cost bounded
+              regardless of database size), and adds up to 20 new firms per run.
             </p>
           )}
 
@@ -211,9 +211,9 @@ export function PopulateModal({
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
-            <Pill color="blue">{result.entitiesFound} candidates found</Pill>
-            <Pill color="green">{result.entitiesAdded} new entities added</Pill>
-            <Pill color="gray">{result.entitiesSkippedDuplicate} skipped as duplicates</Pill>
+            <Pill color="blue">{result.firmsFound} candidates found</Pill>
+            <Pill color="green">{result.firmsAdded} new firms added</Pill>
+            <Pill color="gray">{result.firmsSkippedDuplicate} skipped as duplicates</Pill>
           </div>
           {result.addedFirms.length > 0 && (
             <ul className="max-h-48 overflow-y-auto text-sm text-text-primary">

@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       await updateCalendarEvent({ userId: user!.id, providerEventId: meeting.providerEventId, status: "canceled" });
     }
     const updated = await prisma.meeting.update({ where: { id }, data: { status: "canceled" } });
-    await prisma.activityLog.create({ data: { entityId: meeting.entityId, type: "note", body: `Meeting canceled: "${meeting.title}"`, createdById: user!.id, deletable: false } });
+    await prisma.activityLog.create({ data: { firmId: meeting.firmId, type: "note", body: `Meeting canceled: "${meeting.title}"`, createdById: user!.id, deletable: false } });
     return NextResponse.json({ meeting: updated });
   }
 
@@ -35,13 +35,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       await updateCalendarEvent({ userId: user!.id, providerEventId: meeting.providerEventId, startTime, endTime });
     }
     const updated = await prisma.meeting.update({ where: { id }, data: { startTime, endTime } });
-    await prisma.activityLog.create({ data: { entityId: meeting.entityId, type: "note", body: `Meeting rescheduled: "${meeting.title}"`, createdById: user!.id, deletable: false } });
+    await prisma.activityLog.create({ data: { firmId: meeting.firmId, type: "note", body: `Meeting rescheduled: "${meeting.title}"`, createdById: user!.id, deletable: false } });
     return NextResponse.json({ meeting: updated });
   }
 
   if (body.action === "log_notes") {
     await prisma.meeting.update({ where: { id }, data: { status: "completed", notesLoggedAt: new Date() } });
-    await prisma.activityLog.create({ data: { entityId: meeting.entityId, type: "meeting", body: body.notes ?? "Meeting notes logged", createdById: user!.id } });
+    await prisma.activityLog.create({ data: { firmId: meeting.firmId, type: "meeting", body: body.notes ?? "Meeting notes logged", createdById: user!.id } });
     return NextResponse.json({ ok: true });
   }
 
@@ -49,20 +49,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // meeting's end time has passed, the user picks one of three outcomes.
   if (body.action === "set_outcome") {
     const outcome = body.outcome as "in_discussion" | "declined";
-    const entity = await prisma.entity.findUniqueOrThrow({ where: { id: meeting.entityId } });
+    const firm = await prisma.firm.findUniqueOrThrow({ where: { id: meeting.firmId } });
 
     await prisma.meeting.update({ where: { id }, data: { status: "completed", notesLoggedAt: new Date() } });
 
     if (outcome === "in_discussion") {
-      await prisma.entityStage.update({ where: { entityId: meeting.entityId }, data: { stage: "in_discussion_diligence", stageChangedAt: new Date() } });
+      await prisma.crmStageRow.update({ where: { firmId: meeting.firmId }, data: { stage: "in_discussion_diligence", stageChangedAt: new Date() } });
       await prisma.activityLog.create({
-        data: { entityId: meeting.entityId, type: "stage_change", body: "Meeting outcome: In Discussion / Due Diligence", createdById: user!.id },
+        data: { firmId: meeting.firmId, type: "stage_change", body: "Meeting outcome: In Discussion / Due Diligence", createdById: user!.id },
       });
-      await createPendingTask(meeting.entityId, entity.name, "send_term_sheet");
+      await createPendingTask(meeting.firmId, firm.name, "send_term_sheet");
     } else {
-      await prisma.entityStage.update({ where: { entityId: meeting.entityId }, data: { stage: "nurture", stageChangedAt: new Date() } });
+      await prisma.crmStageRow.update({ where: { firmId: meeting.firmId }, data: { stage: "nurture", stageChangedAt: new Date() } });
       await prisma.activityLog.create({
-        data: { entityId: meeting.entityId, type: "stage_change", body: "Meeting outcome: Declined — moved to Nurture", createdById: user!.id },
+        data: { firmId: meeting.firmId, type: "stage_change", body: "Meeting outcome: Declined — moved to Nurture", createdById: user!.id },
       });
     }
 

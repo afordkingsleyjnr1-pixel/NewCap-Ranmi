@@ -7,7 +7,7 @@ import { Select, Label, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/drawer";
 import { Mail, RefreshCw, FileText, CalendarClock, StickyNote, ArrowRightCircle, UserCog, Loader2, Users } from "lucide-react";
 import { BulkEmailModal } from "./bulk-email-modal";
-import { SelectFirmsModal } from "./select-entities-modal";
+import { SelectFirmsModal } from "./select-firms-modal";
 import { CRM_STAGES, STAGE_LABELS, type CrmStageKey } from "@/lib/crm-stages";
 import type { StageAction } from "@/lib/crm-stages";
 
@@ -25,22 +25,22 @@ interface MemberOption {
 }
 
 // Section: Actions Within Projects — every CRM action a user can take,
-// individually or in bulk, run directly against entities selected right here.
+// individually or in bulk, run directly against firms selected right here.
 // Open to any user with send_outreach/edit_firms (not admin-only) — the
 // action bar pattern (select records, then pick what to do to all of them)
 // mirrors how HubSpot/Salesforce list views handle bulk actions.
 export function ActionsTab({
   projectId,
-  entities,
+  firms,
   members,
   handleAction,
   onDone,
 }: {
   projectId: string;
-  entities: FirmForActions[];
+  firms: FirmForActions[];
   members: MemberOption[];
   /** From the shared useNextStepActions() instance — reused here so Schedule Meeting opens the exact same modal as everywhere else in the app. */
-  handleAction: (entityId: string, action: NonNullable<StageAction>, meetingId?: string, firmName?: string) => void;
+  handleAction: (firmId: string, action: NonNullable<StageAction>, meetingId?: string, firmName?: string) => void;
   onDone: () => void;
 }) {
   const [selectedFirmIds, setSelectedFirmIds] = useState<Set<string>>(new Set());
@@ -59,9 +59,9 @@ export function ActionsTab({
   const [ownerValue, setOwnerValue] = useState("");
   const [ownerSaving, setOwnerSaving] = useState(false);
 
-  const selectedFirms = entities.filter((f) => selectedFirmIds.has(f.id));
+  const selectedFirms = firms.filter((f) => selectedFirmIds.has(f.id));
   const targets = selectedFirms.map((f) => ({
-    entityId: f.id,
+    firmId: f.id,
     contactId: contactOverrides[f.id] ?? f.contacts.find((c) => c.email)?.id,
     firmName: f.name,
   }));
@@ -90,7 +90,7 @@ export function ActionsTab({
     setNoteSaving(true);
     try {
       await Promise.all(
-        selectedFirms.map((f) => fetch(`/api/entities/${f.id}/notes`, { method: "POST", body: JSON.stringify({ body: noteText }) }))
+        selectedFirms.map((f) => fetch(`/api/firms/${f.id}/notes`, { method: "POST", body: JSON.stringify({ body: noteText }) }))
       );
       setNoteOpen(false);
       setNoteText("");
@@ -119,7 +119,7 @@ export function ActionsTab({
     setOwnerSaving(true);
     try {
       await Promise.all(
-        selectedFirms.map((f) => fetch(`/api/entities/${f.id}`, { method: "PATCH", body: JSON.stringify({ ownerId: ownerValue || null }) }))
+        selectedFirms.map((f) => fetch(`/api/firms/${f.id}`, { method: "PATCH", body: JSON.stringify({ ownerId: ownerValue || null }) }))
       );
       setOwnerOpen(false);
       setSelectedFirmIds(new Set());
@@ -141,7 +141,7 @@ export function ActionsTab({
       label: "Schedule Meeting",
       icon: CalendarClock,
       enabled: singleSelection,
-      disabledReason: "Select exactly one entity to schedule a meeting",
+      disabledReason: "Select exactly one firm to schedule a meeting",
       onClick: openScheduleMeeting,
     },
     { key: "note", label: "Add Note", icon: StickyNote, enabled: hasSelection, onClick: () => setNoteOpen(true) },
@@ -154,7 +154,7 @@ export function ActionsTab({
       <div>
         <h3 className="mb-1 text-sm font-semibold text-text-primary">1. Choose an action</h3>
         <p className="mb-2 text-xs text-text-secondary">
-          {hasSelection ? `Applies to ${selectedFirmIds.size} entity${selectedFirmIds.size === 1 ? "" : "s"}.` : "Select entities below first."}
+          {hasSelection ? `Applies to ${selectedFirmIds.size} firm${selectedFirmIds.size === 1 ? "" : "s"}.` : "Select firms below first."}
         </p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {ACTIONS.map((a) => {
@@ -164,7 +164,7 @@ export function ActionsTab({
                 key={a.key}
                 onClick={a.onClick}
                 disabled={!a.enabled}
-                title={!a.enabled ? a.disabledReason ?? "Select at least one entity first" : undefined}
+                title={!a.enabled ? a.disabledReason ?? "Select at least one firm first" : undefined}
                 className="flex flex-col items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-4 text-center text-xs font-medium text-text-primary hover:border-accent hover:bg-accent/5 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-surface"
               >
                 <Icon className="h-5 w-5 text-accent" />
@@ -177,15 +177,15 @@ export function ActionsTab({
 
       <div>
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-text-primary">2. Select entities</h3>
+          <h3 className="text-sm font-semibold text-text-primary">2. Select firms</h3>
           <Button size="sm" variant="outline" onClick={() => setPickerOpen(true)}>
-            <Users className="h-3.5 w-3.5" /> Select Entity(s)
+            <Users className="h-3.5 w-3.5" /> Select Firm(s)
           </Button>
         </div>
         <p className="mb-2 mt-1 text-xs text-text-secondary">
           {hasSelection
-            ? "When a entity has more than one contact, choose which one to use below."
-            : "Nothing selected yet — click Select Entity(s) to search and choose who the action applies to."}
+            ? "When a firm has more than one contact, choose which one to use below."
+            : "Nothing selected yet — click Select Firm(s) to search and choose who the action applies to."}
         </p>
         {hasSelection && (
           <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-2">
@@ -224,7 +224,7 @@ export function ActionsTab({
       <SelectFirmsModal
         open={pickerOpen}
         onOpenChange={setPickerOpen}
-        entities={entities}
+        firms={firms}
         initialSelected={selectedFirmIds}
         onConfirm={setSelectedFirmIds}
       />
@@ -243,7 +243,7 @@ export function ActionsTab({
 
       <Modal open={noteOpen} onOpenChange={setNoteOpen} title="Add Note" widthClassName="max-w-md">
         <div className="space-y-3">
-          <p className="text-xs text-text-secondary">Logs the same note to {selectedFirms.length} entity(s)' Activity tab.</p>
+          <p className="text-xs text-text-secondary">Logs the same note to {selectedFirms.length} firm(s)' Activity tab.</p>
           <div>
             <Label>Note</Label>
             <Textarea rows={4} value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="What's the update?" />
@@ -261,7 +261,7 @@ export function ActionsTab({
 
       <Modal open={stageOpen} onOpenChange={setStageOpen} title="Change CRM Stage" widthClassName="max-w-md">
         <div className="space-y-3">
-          <p className="text-xs text-text-secondary">Moves {selectedFirms.length} entity(s) to the selected stage.</p>
+          <p className="text-xs text-text-secondary">Moves {selectedFirms.length} firm(s) to the selected stage.</p>
           <div>
             <Label>New Stage</Label>
             <Select value={stageValue} onChange={(e) => setStageValue(e.target.value as CrmStageKey)}>
@@ -285,7 +285,7 @@ export function ActionsTab({
 
       <Modal open={ownerOpen} onOpenChange={setOwnerOpen} title="Assign Owner" widthClassName="max-w-md">
         <div className="space-y-3">
-          <p className="text-xs text-text-secondary">Sets the owner for {selectedFirms.length} entity(s).</p>
+          <p className="text-xs text-text-secondary">Sets the owner for {selectedFirms.length} firm(s).</p>
           <div>
             <Label>Owner</Label>
             <Select value={ownerValue} onChange={(e) => setOwnerValue(e.target.value)}>

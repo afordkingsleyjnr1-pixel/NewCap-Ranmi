@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { createNotification } from "./notifications";
 
 /**
- * Section: "Email Sent" / "Follow-Up Sent" — if the entity replies before the
+ * Section: "Email Sent" / "Follow-Up Sent" — if the firm replies before the
  * follow-up date, automatically move it to "Responded". Shared by both the
  * Gmail and Outlook reply webhooks so the stage-transition logic lives in
  * one place.
@@ -32,19 +32,19 @@ export async function handleInboundReply(params: {
   });
   await prisma.emailThread.update({ where: { id: thread.id }, data: { status: "replied", lastActivityAt: new Date(), hasUnreadReply: true } });
 
-  if (thread.entityId) {
+  if (thread.firmId) {
     await prisma.activityLog.create({
-      data: { entityId: thread.entityId, contactId: thread.contactId, type: "email_received", body: "Reply received", createdById: null },
+      data: { firmId: thread.firmId, contactId: thread.contactId, type: "email_received", body: "Reply received", createdById: null },
     });
 
     // Free-form messages (Messages section) aren't part of the CRM stage machine — only
     // CRM-driven threads auto-advance to "Responded".
     if (!thread.isFreeForm) {
-      const stage = await prisma.entityStage.findUnique({ where: { entityId: thread.entityId } });
-      if (stage && stage.stage !== "do_not_contact" && stage.stage !== "responded") {
-        await prisma.entityStage.update({ where: { entityId: thread.entityId }, data: { stage: "responded", stageChangedAt: new Date() } });
+      const crmStage = await prisma.crmStageRow.findUnique({ where: { firmId: thread.firmId } });
+      if (crmStage && crmStage.stage !== "do_not_contact" && crmStage.stage !== "responded") {
+        await prisma.crmStageRow.update({ where: { firmId: thread.firmId }, data: { stage: "responded", stageChangedAt: new Date() } });
         await prisma.activityLog.create({
-          data: { entityId: thread.entityId, type: "stage_change", body: "Reply received — stage automatically changed to Responded", createdById: null },
+          data: { firmId: thread.firmId, type: "stage_change", body: "Reply received — stage automatically changed to Responded", createdById: null },
         });
       }
     }
@@ -53,7 +53,7 @@ export async function handleInboundReply(params: {
   await createNotification({
     userId: params.notifyUserId,
     type: "reply_received",
-    relatedFirmId: thread.entityId ?? null,
+    relatedFirmId: thread.firmId ?? null,
     body: `New reply on "${thread.subject}"`,
   });
 }
@@ -72,7 +72,7 @@ export async function ingestNewInboundThread(params: {
   fromEmail: string;
   fromName: string | null;
   contactId: string | null;
-  entityId: string | null;
+  firmId: string | null;
   notifyUserId: string;
   providerThreadId: string;
   providerMessageId: string;
@@ -82,7 +82,7 @@ export async function ingestNewInboundThread(params: {
 }): Promise<string> {
   const thread = await prisma.emailThread.create({
     data: {
-      entityId: params.entityId,
+      firmId: params.firmId,
       contactId: params.contactId,
       adHocRecipientName: params.contactId ? null : params.fromName,
       adHocRecipientEmail: params.contactId ? null : params.fromEmail,
@@ -108,16 +108,16 @@ export async function ingestNewInboundThread(params: {
     },
   });
 
-  if (params.entityId) {
+  if (params.firmId) {
     await prisma.activityLog.create({
-      data: { entityId: params.entityId, contactId: params.contactId, type: "email_received", body: "New email received", createdById: null },
+      data: { firmId: params.firmId, contactId: params.contactId, type: "email_received", body: "New email received", createdById: null },
     });
   }
 
   await createNotification({
     userId: params.notifyUserId,
     type: "reply_received",
-    relatedFirmId: params.entityId,
+    relatedFirmId: params.firmId,
     body: `New email from ${params.fromName ?? params.fromEmail}: "${params.subject}"`,
   });
 

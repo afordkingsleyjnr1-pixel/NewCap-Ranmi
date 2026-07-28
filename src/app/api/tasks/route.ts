@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { requirePermission, firmScopeWhere, ForbiddenError } from "@/lib/authz";
 import { TASK_TITLES } from "@/lib/crm-stages";
 
-// Section 5.9 step 4 — Projects view: every open task across every entity, sorted by due date.
+// Section 5.9 step 4 — Projects view: every open task across every firm, sorted by due date.
 // Optional ?projectId= scopes to one project's tasks (used by the Project dashboard).
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
@@ -13,9 +13,9 @@ export async function GET(req: NextRequest) {
   const scope = await firmScopeWhere(user);
   const projectId = req.nextUrl.searchParams.get("projectId");
   const tasks = await prisma.task.findMany({
-    where: { entity: { deletedAt: null, ...scope }, ...(projectId ? { projectId } : {}) },
+    where: { firm: { deletedAt: null, ...scope }, ...(projectId ? { projectId } : {}) },
     include: {
-      entity: true,
+      firm: true,
       contact: { select: { id: true, name: true } },
       owner: { select: { id: true, name: true } },
       project: { select: { id: true, name: true } },
@@ -25,19 +25,19 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ tasks });
 }
 
-// Body: { entityId | firmIds[], contactId?, title?, description?, priority?,
+// Body: { firmId | firmIds[], contactId?, title?, description?, priority?,
 // dueDate?, ownerId?, projectId?, kind? }
 // `kind` (one of TASK_TITLES: send_email / send_follow_up / schedule_meeting /
 // send_term_sheet) creates the same system pending-action task the CRM Next
 // Step engine creates automatically — so adding e.g. a "Send Email" task from
 // within a project is indistinguishable from one the pipeline generated, and
-// completing it (via the existing Next Step buttons) still drives the entity's
+// completing it (via the existing Next Step buttons) still drives the firm's
 // CRM stage forward. Omit `kind` for a plain ad hoc task (custom title).
 //
-// `firmIds` (plural) creates one Task row per entity, all sharing the same
-// title/kind/notes/priority/due date/assignee — "Related Entities" in a
-// project's Add Task can be one, several, or every entity in the project;
-// each entity still tracks its own task/CRM-stage progress independently,
+// `firmIds` (plural) creates one Task row per firm, all sharing the same
+// title/kind/notes/priority/due date/assignee — "Related Firms" in a
+// project's Add Task can be one, several, or every firm in the project;
+// each firm still tracks its own task/CRM-stage progress independently,
 // same as if it had been added one at a time.
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   // Project tasks are now plain admin-created to-dos — every actual CRM
   // action (send email, schedule meeting, change stage, etc.) is done
   // directly from a project's Actions tab instead, open to any user with
-  // send_outreach/edit_firms. Entity-level quick tasks (no projectId) keep
+  // send_outreach/edit_firms. Firm-level quick tasks (no projectId) keep
   // the broader manage_tasks gate.
   if (body.projectId) {
     try {
@@ -63,26 +63,26 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const firmIds: string[] = Array.isArray(body.firmIds) && body.firmIds.length ? body.firmIds : body.entityId ? [body.entityId] : [];
-  if (firmIds.length === 0) return NextResponse.json({ error: "At least one entity is required" }, { status: 400 });
+  const firmIds: string[] = Array.isArray(body.firmIds) && body.firmIds.length ? body.firmIds : body.firmId ? [body.firmId] : [];
+  if (firmIds.length === 0) return NextResponse.json({ error: "At least one firm is required" }, { status: 400 });
 
   const priority = ["low", "medium", "high"].includes(body.priority) ? body.priority : "medium";
   const batchId = firmIds.length > 1 ? randomUUID() : null;
 
   const tasks = [];
-  for (const entityId of firmIds) {
+  for (const firmId of firmIds) {
     let title: string = body.title;
     let isFromTemplate = false;
     if (body.kind && body.kind in TASK_TITLES) {
-      const entity = await prisma.entity.findUniqueOrThrow({ where: { id: entityId } });
-      title = TASK_TITLES[body.kind as keyof typeof TASK_TITLES](entity.name);
+      const firm = await prisma.firm.findUniqueOrThrow({ where: { id: firmId } });
+      title = TASK_TITLES[body.kind as keyof typeof TASK_TITLES](firm.name);
       isFromTemplate = true;
     }
     if (!title?.trim()) return NextResponse.json({ error: "Task title is required" }, { status: 400 });
 
     const task = await prisma.task.create({
       data: {
-        entityId,
+        firmId,
         contactId: firmIds.length === 1 ? body.contactId || null : null,
         projectId: body.projectId ?? null,
         title,

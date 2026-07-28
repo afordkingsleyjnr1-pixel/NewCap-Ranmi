@@ -17,13 +17,13 @@ const TASK_KINDS = [
 export function QuickAddTaskModal({
   open,
   onOpenChange,
-  entityId,
+  firmId,
   firmName,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  entityId: string | null;
+  firmId: string | null;
   firmName?: string;
   onAdded: () => void;
 }) {
@@ -51,11 +51,11 @@ export function QuickAddTaskModal({
   const needsCustomTitle = kind === "custom";
 
   async function submit() {
-    if (!entityId) return;
+    if (!firmId) return;
     setLoading(true);
     setError(null);
     try {
-      const body: Record<string, unknown> = { entityId, dueDate: dueDate || undefined, ownerId: ownerId || undefined };
+      const body: Record<string, unknown> = { firmId, dueDate: dueDate || undefined, ownerId: ownerId || undefined };
       if (needsCustomTitle) body.title = customTitle;
       else body.kind = kind;
       const res = await fetch("/api/tasks", { method: "POST", body: JSON.stringify(body) });

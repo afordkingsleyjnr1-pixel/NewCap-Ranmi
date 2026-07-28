@@ -1,5 +1,5 @@
 // Shared by contact-discovery.ts (the standalone "Find Contact" button) and
-// entity-core-research.ts (contacts found as part of the combined Add Entity
+// firm-core-research.ts (contacts found as part of the combined Add Firm
 // research call) — one deterministic ranking rule, not duplicated logic that
 // could drift between the two call sites.
 

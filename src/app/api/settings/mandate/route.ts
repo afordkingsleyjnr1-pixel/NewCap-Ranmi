@@ -11,7 +11,7 @@ export async function GET() {
   return NextResponse.json({ settings });
 }
 
-// Section 4.6 — editing the band immediately recomputes within_mandate for every existing entity.
+// Section 4.6 — editing the band immediately recomputes within_mandate for every existing firm.
 export async function PATCH(req: NextRequest) {
   const user = await getCurrentUser();
   try {

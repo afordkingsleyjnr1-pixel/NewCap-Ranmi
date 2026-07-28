@@ -1,4 +1,4 @@
-// The CRM pipeline stage machine. Every entity sits in exactly one of these
+// The CRM pipeline stage machine. Every firm sits in exactly one of these
 // stages; the Next Step engine below derives the one required action from
 // (stage, open pending-action tasks, whether a scheduled meeting has passed).
 export const CRM_STAGES = [
@@ -96,7 +96,7 @@ export interface NextStepInfo {
 
 /**
  * The Next Step engine. Every stage implies exactly one next action, except
- * "Responded" — which shows "Review Reply" until the user marks the entity
+ * "Responded" — which shows "Review Reply" until the user marks the firm
  * Interested (at which point a "Schedule Meeting" task exists and the next
  * step becomes "Set Meeting"), and "Meeting Scheduled," which shows nothing
  * until the meeting's end time has passed, then asks for the outcome.
@@ -139,7 +139,7 @@ export function computeNextStep(
   }
 }
 
-/** Convenience wrapper: derives meetingOverdue from a entity's most recent scheduled meeting. */
+/** Convenience wrapper: derives meetingOverdue from a firm's most recent scheduled meeting. */
 export function nextStepForFirm(
   stage: CrmStageKey,
   openTasks: OpenTaskRef[],
