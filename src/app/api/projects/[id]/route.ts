@@ -33,6 +33,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
           owner: { select: { id: true, name: true } },
           firm: { select: { id: true, name: true } },
           contact: { select: { id: true, name: true } },
+          completionVerifiedBy: { select: { id: true, name: true } },
         },
         orderBy: [{ status: "asc" }, { dueDate: "asc" }],
       },

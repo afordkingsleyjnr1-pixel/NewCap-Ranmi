@@ -127,6 +127,20 @@ enum TaskPriority {
   high
 }
 
+// Separate from TaskStatus (open/done), which drives the automated CRM
+// pending-action lifecycle (pipeline-tasks.ts) and must keep its exact
+// current semantics. TaskTrackerStatus is the user-facing progress state
+// for manual task tracking — set independently, but completed/reopened
+// here also flips TaskStatus + completedAt so the two stay in sync from
+// the tracker's side.
+enum TaskTrackerStatus {
+  not_started
+  in_progress
+  under_review
+  completed
+  blocked
+}
+
 enum PopulateMode {
   similar_to_firm
   by_criteria
@@ -190,6 +204,8 @@ model User {
   emailConnection   EmailConnection?
   ownedCrmStages    CrmStageRow[]     @relation("StageOwner")
   ownedTasks        Task[]            @relation("TaskOwner")
+  verifiedTasks     Task[]            @relation("TaskCompletionVerifiedBy")
+  taskComments      TaskComment[]     @relation("TaskCommentCreatedBy")
   activityLogs      ActivityLog[]     @relation("ActivityCreatedBy")
   notifications     Notification[]
   populateRuns      PopulateRun[]
@@ -472,8 +488,34 @@ model Task {
   /// "Send Email" button that executes across the whole batch at once.
   batchId        String?      @map("batch_id")
 
+  trackerStatus         TaskTrackerStatus @default(not_started) @map("tracker_status")
+  progressPercent        Int              @default(0) @map("progress_percent")
+  timeSpentMinutes       Int              @default(0) @map("time_spent_minutes")
+  completionVerifiedById String?          @map("completion_verified_by")
+  completionVerifiedBy   User?            @relation("TaskCompletionVerifiedBy", fields: [completionVerifiedById], references: [id])
+  completionVerifiedAt   DateTime?        @map("completion_verified_at")
+  comments               TaskComment[]
+
   @@index([batchId])
   @@map("tasks")
+}
+
+// Combined activity feed for a task: system-generated entries (status
+// changes, progress updates, time logged) and user-written comments live in
+// the same ordered stream, distinguished by isSystem — one feed to render
+// instead of merging two separate queries client-side.
+model TaskComment {
+  id          String   @id @default(uuid())
+  taskId      String   @map("task_id")
+  task        Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  body        String   @db.Text
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdById String?  @map("created_by")
+  createdBy   User?    @relation("TaskCommentCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@map("task_comments")
 }
 
 // ────────────────────────────────────────────────────────────────────────

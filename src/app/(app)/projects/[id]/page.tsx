@@ -17,6 +17,7 @@ import { AddTaskModal } from "./_components/add-task-modal";
 import { AssignMemberModal } from "./_components/assign-member-modal";
 import { BulkEmailModal } from "./_components/bulk-email-modal";
 import { ActionsTab } from "./_components/actions-tab";
+import { TaskDetailModal } from "./_components/task-detail-modal";
 
 interface ProjectFirmRow {
   firmId: string;
@@ -44,6 +45,11 @@ interface TaskRow {
   owner: { id: string; name: string } | null;
   contact: { id: string; name: string } | null;
   firm: { id: string; name: string };
+  trackerStatus: "not_started" | "in_progress" | "under_review" | "completed" | "blocked";
+  progressPercent: number;
+  timeSpentMinutes: number;
+  completionVerifiedBy: { id: string; name: string } | null;
+  completionVerifiedAt: string | null;
 }
 
 interface ProjectDetail {
@@ -81,6 +87,7 @@ export default function ProjectDetailPage() {
   const [assignMemberOpen, setAssignMemberOpen] = useState(false);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [canManageSettings, setCanManageSettings] = useState(false);
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -349,6 +356,7 @@ export default function ProjectDetailPage() {
                     <th>Firm</th>
                     <th>Contact</th>
                     <th>Priority</th>
+                    <th>Progress</th>
                     <th>Due Date</th>
                     <th>Owner</th>
                     <th></th>
@@ -357,16 +365,26 @@ export default function ProjectDetailPage() {
                 <tbody>
                   {project.tasks.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-text-secondary">
+                      <td colSpan={9} className="py-8 text-center text-text-secondary">
                         No tasks yet.
                       </td>
                     </tr>
                   )}
                   {project.tasks.map((t) => {
                     const overdue = t.dueDate && t.status === "open" && new Date(t.dueDate) < now;
+                    const trackerColor =
+                      t.trackerStatus === "completed"
+                        ? "green"
+                        : t.trackerStatus === "blocked"
+                          ? "red"
+                          : t.trackerStatus === "under_review"
+                            ? "amber"
+                            : t.trackerStatus === "in_progress"
+                              ? "blue"
+                              : "gray";
                     return (
-                      <tr key={t.id}>
-                        <td>
+                      <tr key={t.id} onClick={() => setDetailTaskId(t.id)} className="cursor-pointer">
+                        <td onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={t.status === "done"} onCheckedChange={() => toggleTaskDone(t)} />
                         </td>
                         <td className={t.status === "done" ? "text-text-secondary line-through" : "text-text-primary"}>
@@ -378,9 +396,17 @@ export default function ProjectDetailPage() {
                         <td>
                           <Pill color={t.priority === "high" ? "red" : t.priority === "low" ? "gray" : "amber"}>{t.priority}</Pill>
                         </td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <Pill color={trackerColor}>{t.trackerStatus.replace(/_/g, " ")}</Pill>
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-page">
+                              <div className="h-full bg-primary" style={{ width: `${t.progressPercent}%` }} />
+                            </div>
+                          </div>
+                        </td>
                         <td>{overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : t.dueDate ? formatDate(t.dueDate) : "—"}</td>
                         <td className="text-text-secondary">{t.owner?.name ?? "—"}</td>
-                        <td>
+                        <td onClick={(e) => e.stopPropagation()}>
                           <button onClick={() => deleteTask(t.id)} className="rounded p-1 text-text-secondary hover:bg-page hover:text-status-red">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
@@ -442,6 +468,13 @@ export default function ProjectDetailPage() {
         onAdded={load}
       />
       <AssignMemberModal open={assignMemberOpen} onOpenChange={setAssignMemberOpen} projectId={project.id} onAdded={load} />
+      <TaskDetailModal
+        open={!!detailTaskId}
+        onOpenChange={(o) => !o && setDetailTaskId(null)}
+        task={project.tasks.find((t) => t.id === detailTaskId) ?? null}
+        canVerifyCompletion={canManageSettings}
+        onChanged={load}
+      />
       <BulkEmailModal
         open={bulkEmailOpen}
         onOpenChange={setBulkEmailOpen}
