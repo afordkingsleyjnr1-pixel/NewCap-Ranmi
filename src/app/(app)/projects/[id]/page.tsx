@@ -19,6 +19,7 @@ import { BulkEmailModal } from "./_components/bulk-email-modal";
 import { ActionsTab } from "./_components/actions-tab";
 import { TaskDetailModal } from "./_components/task-detail-modal";
 import { ProjectMessagesTab } from "./_components/project-messages-tab";
+import { ProjectTaxonomyTab } from "./_components/project-taxonomy-tab";
 
 interface ProjectFirmRow {
   firmId: string;
@@ -65,6 +66,9 @@ interface ProjectDetail {
   members: Array<{ userId: string; user: { id: string; name: string; email: string; status: string } }>;
   firms: ProjectFirmRow[];
   tasks: TaskRow[];
+  taxonomy: Record<string, string[]> | null;
+  taxonomyDescription: string | null;
+  taxonomyConfirmedAt: string | null;
 }
 
 interface ActivityRow {
@@ -216,6 +220,7 @@ export default function ProjectDetailPage() {
           <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
           <TabsTrigger value="messages">Messages</TabsTrigger>
+          <TabsTrigger value="taxonomy">Taxonomy</TabsTrigger>
           <TabsTrigger value="members">Members ({project.members.length})</TabsTrigger>
         </TabsList>
 
@@ -434,6 +439,16 @@ export default function ProjectDetailPage() {
 
         <TabsContent value="messages">
           <ProjectMessagesTab projectId={project.id} />
+        </TabsContent>
+
+        <TabsContent value="taxonomy">
+          <ProjectTaxonomyTab
+            projectId={project.id}
+            initialTaxonomy={project.taxonomy}
+            initialDescription={project.taxonomyDescription}
+            confirmedAt={project.taxonomyConfirmedAt}
+            onSaved={load}
+          />
         </TabsContent>
 
         <TabsContent value="members">
