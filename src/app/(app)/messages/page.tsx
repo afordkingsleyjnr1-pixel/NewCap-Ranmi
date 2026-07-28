@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Pill, TagPill } from "@/components/ui/badge";
-import { Textarea, Input } from "@/components/ui/input";
+import { Textarea, Input, Select } from "@/components/ui/input";
 import { formatDateTime, formatRelativeListTime, cn } from "@/lib/utils";
 import {
   Plus,
@@ -55,7 +56,14 @@ interface Thread {
   deletedAt: string | null;
   adHocRecipientName: string | null;
   adHocRecipientEmail: string | null;
-  firm: { id: string; name: string } | null;
+  firm:
+    | {
+        id: string;
+        name: string;
+        projectFirms: Array<{ project: { id: string; name: string } }>;
+        crmStage: { owner: { id: string; name: string } | null } | null;
+      }
+    | null;
   contact: { id: string; name: string; email: string | null } | null;
   messages: Message[];
 }
@@ -105,13 +113,51 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
   const [forwardFrom, setForwardFrom] = useState<{ subject: string; body: string } | null>(null);
 
-  const loadThreads = useCallback(async (f: Folder, showSpinner = true) => {
-    if (showSpinner) setLoading(true);
-    const res = await fetch(`/api/messages?folder=${f}`);
-    const data = await res.json();
-    setThreads(data.threads ?? []);
-    if (showSpinner) setLoading(false);
+  const [search, setSearch] = useState("");
+  const [filterProjectId, setFilterProjectId] = useState("");
+  const [filterOwnerId, setFilterOwnerId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [teamMembers, setTeamMembers] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((d) => setProjects((d.projects ?? []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))));
+    fetch("/api/users")
+      .then((r) => r.json())
+      .then((d) => setTeamMembers((d.users ?? []).map((u: { id: string; name: string }) => ({ id: u.id, name: u.name }))));
   }, []);
+
+  const hasFilters = !!(search || filterProjectId || filterOwnerId || filterStatus || filterDateFrom || filterDateTo);
+
+  function clearFilters() {
+    setSearch("");
+    setFilterProjectId("");
+    setFilterOwnerId("");
+    setFilterStatus("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  }
+
+  const loadThreads = useCallback(
+    async (f: Folder, showSpinner = true) => {
+      if (showSpinner) setLoading(true);
+      const qs = new URLSearchParams({ folder: f });
+      if (filterProjectId) qs.set("projectId", filterProjectId);
+      if (filterOwnerId) qs.set("ownerId", filterOwnerId);
+      if (filterStatus) qs.set("status", filterStatus);
+      if (filterDateFrom) qs.set("dateFrom", filterDateFrom);
+      if (filterDateTo) qs.set("dateTo", filterDateTo);
+      const res = await fetch(`/api/messages?${qs.toString()}`);
+      const data = await res.json();
+      setThreads(data.threads ?? []);
+      if (showSpinner) setLoading(false);
+    },
+    [filterProjectId, filterOwnerId, filterStatus, filterDateFrom, filterDateTo]
+  );
 
   const loadDrafts = useCallback(async () => {
     setLoading(true);
@@ -136,8 +182,32 @@ export default function MessagesPage() {
 
   useEffect(() => {
     load(true);
+    setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folder]);
+  }, [folder, filterProjectId, filterOwnerId, filterStatus, filterDateFrom, filterDateTo]);
+
+  // Deep-link support (e.g. from a project's Messages tab): ?open=<threadId>
+  // jumps straight to the reader regardless of which folder the thread
+  // happens to live in.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const openThreadId = searchParams.get("open");
+    if (!openThreadId) return;
+    fetch(`/api/messages?folder=all`)
+      .then((r) => r.json())
+      .then((d) => {
+        const found = (d.threads ?? []).find((t: Thread) => t.id === openThreadId);
+        if (found) {
+          setThreads((prev) => {
+            const withoutIt = prev.filter((t) => t.id !== found.id);
+            return [found, ...withoutIt];
+          });
+          setOpenId(found.id);
+          setView("reader");
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // Replies pull in via /api/messages's sync (see reply-sync.ts) — poll in
   // the background so a reply shows up while this page is open, not just on
@@ -148,14 +218,26 @@ export default function MessagesPage() {
     return () => clearInterval(interval);
   }, [folder, loadThreads]);
 
-  const pageCount = folder === "drafts" ? Math.max(1, Math.ceil(drafts.length / PAGE_SIZE)) : Math.max(1, Math.ceil(threads.length / PAGE_SIZE));
+  // Firm/contact/subject search is applied client-side over the (already
+  // server-filtered by folder/project/owner/status/date) thread list —
+  // same tradeoff as the rest of this list: everything's fetched up front,
+  // so a text match doesn't need its own round trip.
+  const searchedThreads = useMemo(() => {
+    if (!search.trim()) return threads;
+    const q = search.trim().toLowerCase();
+    return threads.filter(
+      (t) => t.subject.toLowerCase().includes(q) || t.firm?.name.toLowerCase().includes(q) || t.contact?.name.toLowerCase().includes(q)
+    );
+  }, [threads, search]);
+
+  const pageCount = folder === "drafts" ? Math.max(1, Math.ceil(drafts.length / PAGE_SIZE)) : Math.max(1, Math.ceil(searchedThreads.length / PAGE_SIZE));
   useEffect(() => {
     if (page > pageCount) setPage(pageCount);
   }, [page, pageCount]);
-  const pagedThreads = useMemo(() => threads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [threads, page]);
+  const pagedThreads = useMemo(() => searchedThreads.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [searchedThreads, page]);
   const pagedDrafts = useMemo(() => drafts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [drafts, page]);
   const rangeStart = (page - 1) * PAGE_SIZE + 1;
-  const rangeEnd = Math.min(page * PAGE_SIZE, folder === "drafts" ? drafts.length : threads.length);
+  const rangeEnd = Math.min(page * PAGE_SIZE, folder === "drafts" ? drafts.length : searchedThreads.length);
 
   const active = threads.find((t) => t.id === openId) ?? null;
 
@@ -331,6 +413,42 @@ export default function MessagesPage() {
         </Button>
       </div>
 
+      {folder !== "drafts" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
+          <Input placeholder="Search firm, contact, subject…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
+          <Select value={filterProjectId} onChange={(e) => setFilterProjectId(e.target.value)} className="w-40">
+            <option value="">All Projects</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          <Select value={filterOwnerId} onChange={(e) => setFilterOwnerId(e.target.value)} className="w-40">
+            <option value="">All Assignees</option>
+            {teamMembers.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </Select>
+          <Select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-40">
+            <option value="">All Statuses</option>
+            <option value="awaiting_reply">Awaiting Reply</option>
+            <option value="replied">Replied</option>
+            <option value="no_response">No Response</option>
+          </Select>
+          <Input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} className="w-36" />
+          <span className="text-xs text-text-secondary">to</span>
+          <Input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} className="w-36" />
+          {hasFilters && (
+            <Button size="sm" variant="ghost" onClick={clearFilters}>
+              <X className="h-3.5 w-3.5" /> Clear Filters
+            </Button>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-[200px_1fr] gap-4">
         {/* Left navigation — fixed */}
         <div className="space-y-1">
@@ -387,6 +505,13 @@ export default function MessagesPage() {
                         recipientLabel(active)
                       )}
                     </p>
+                    {active.firm?.projectFirms && active.firm.projectFirms.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {active.firm.projectFirms.map((pf) => (
+                          <TagPill key={pf.project.id}>{pf.project.name}</TagPill>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 gap-1.5">
@@ -641,6 +766,7 @@ export default function MessagesPage() {
                         >
                           <span className={cn("truncate text-sm text-text-primary", unread ? "font-bold" : "font-normal")}>{listSenderLabel(t)}</span>
                           <span className="min-w-0 truncate text-sm">
+                            {t.firm?.projectFirms?.[0] && <TagPill className="mr-1.5">{t.firm.projectFirms[0].project.name}</TagPill>}
                             <span className={cn("text-text-primary", unread ? "font-bold" : "font-normal")}>{t.subject}</span>
                             <span className="text-text-secondary"> — {snippet(t)}</span>
                           </span>
