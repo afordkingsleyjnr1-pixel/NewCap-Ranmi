@@ -81,6 +81,75 @@ function outsideAumBand(aumValue: number | null, band: { min?: number; max?: num
   return false;
 }
 
+// Find Similar Firms previously relied on the candidate-search prompt alone
+// to stay "similar" (an AUM band hint plus copying the seed's exact
+// strategies/focus areas into the brief) — anything the model returned was
+// added outright, so a firm miles off on AUM or with only a token strategy
+// overlap could still get through. This scores each candidate against the
+// seed across five weighted factors and discards anything below threshold,
+// mirroring the outsideAumBand/discardFirm pattern already used for
+// by_criteria. Any factor missing data on either side scores neutral (0.5)
+// rather than 0 — an absent field shouldn't sink an otherwise-strong match.
+const SIMILARITY_WEIGHTS = { aum: 0.3, strategies: 0.25, focusAreas: 0.2, geography: 0.15, targetMarkets: 0.1 };
+const SIMILARITY_THRESHOLD = 0.35;
+
+function flattenTaxonomy(t: Record<string, string[]> | null | undefined): Set<string> {
+  const out = new Set<string>();
+  if (!t) return out;
+  for (const [parent, children] of Object.entries(t)) {
+    if (!children?.length) out.add(parent);
+    else children.forEach((c) => out.add(`${parent}:${c}`));
+  }
+  return out;
+}
+
+function jaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 && b.size === 0) return 0.5;
+  let intersection = 0;
+  for (const x of a) if (b.has(x)) intersection++;
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0.5 : intersection / union;
+}
+
+function geographyScore(seedHq: string | null, candidateHq: string | null): number {
+  if (!seedHq || !candidateHq) return 0.5;
+  const a = seedHq.toLowerCase();
+  const b = candidateHq.toLowerCase();
+  const seedCountry = a.split(",").pop()?.trim() ?? a;
+  const candidateCountry = b.split(",").pop()?.trim() ?? b;
+  if (seedCountry === candidateCountry) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.7;
+  return 0;
+}
+
+function aumProximityScore(seedAum: number | null, candidateAum: number | null): number {
+  if (seedAum == null || candidateAum == null || seedAum <= 0 || candidateAum <= 0) return 0.5;
+  return Math.min(seedAum, candidateAum) / Math.max(seedAum, candidateAum);
+}
+
+interface SimilarityProfile {
+  strategies: Record<string, string[]> | null;
+  focusAreas: Record<string, string[]> | null;
+  hqLocation: string | null;
+  aumValue: number | null;
+  targetMarkets: string[];
+}
+
+function similarityScore(seed: SimilarityProfile, candidate: SimilarityProfile): number {
+  const aum = aumProximityScore(seed.aumValue, candidate.aumValue);
+  const strategies = jaccard(flattenTaxonomy(seed.strategies), flattenTaxonomy(candidate.strategies));
+  const focusAreas = jaccard(flattenTaxonomy(seed.focusAreas), flattenTaxonomy(candidate.focusAreas));
+  const geography = geographyScore(seed.hqLocation, candidate.hqLocation);
+  const targetMarkets = jaccard(new Set(seed.targetMarkets ?? []), new Set(candidate.targetMarkets ?? []));
+  return (
+    aum * SIMILARITY_WEIGHTS.aum +
+    strategies * SIMILARITY_WEIGHTS.strategies +
+    focusAreas * SIMILARITY_WEIGHTS.focusAreas +
+    geography * SIMILARITY_WEIGHTS.geography +
+    targetMarkets * SIMILARITY_WEIGHTS.targetMarkets
+  );
+}
+
 // Cleans up a firm created moments ago by runFirmResearchPipeline once it's
 // determined to be outside the requested AUM band — mirrors the deletion
 // order used by the Recently Deleted → Delete Permanently purge route.
@@ -135,9 +204,17 @@ export async function runPopulate(params: {
   });
 
   let briefs: SearchBrief[] = [];
+  let seedProfile: SimilarityProfile | null = null;
 
   if (params.mode === "similar_to_firm") {
     const seed = await prisma.firm.findUniqueOrThrow({ where: { id: params.seedFirmId! } });
+    seedProfile = {
+      strategies: seed.strategies as Record<string, string[]>,
+      focusAreas: seed.focusAreas as Record<string, string[]>,
+      hqLocation: seed.hqLocation,
+      aumValue: seed.aumValue ? Number(seed.aumValue) : null,
+      targetMarkets: seed.targetMarkets,
+    };
     briefs = [
       {
         strategies: seed.strategies as Record<string, string[]>,
@@ -179,11 +256,15 @@ export async function runPopulate(params: {
     }
   }
 
-  // by_criteria is the one mode with a single, user-facing target count, so
-  // it's worth an extra round or two of searching (excluding names already
-  // found) if the first pass came up short — the other modes run one brief
-  // per existing firm and aren't asking for a specific headcount.
-  if (params.mode === "by_criteria") {
+  // by_criteria and similar_to_firm both run off a single brief with a
+  // specific target headcount, so both are worth an extra round or two of
+  // searching (excluding names already found) if the first pass came up
+  // short — previously only by_criteria retried, which is why Find Similar
+  // Firms (similar_to_firm) so often "failed on the first attempt" whenever
+  // that single web-search call came back thin or empty. database_wide runs
+  // one brief per existing firm and isn't asking for a specific headcount,
+  // so it's intentionally left out of this retry.
+  if (params.mode === "by_criteria" || params.mode === "similar_to_firm") {
     for (let round = 0; round < MAX_SEARCH_ROUNDS && allCandidateNames.size < maxFirmsToAdd; round++) {
       emit(`Found ${allCandidateNames.size} of ${maxFirmsToAdd} requested — searching for more…`);
       try {
@@ -226,6 +307,22 @@ export async function runPopulate(params: {
           `${name}: skipped — AUM ${formatAum(outcome.aumValue)} is outside the requested $${params.criteria?.aumBand?.min ? formatAum(params.criteria.aumBand.min) : "0"}–${params.criteria?.aumBand?.max ? formatAum(params.criteria.aumBand.max) : "unbounded"} band.`
         );
         continue;
+      }
+
+      if (params.mode === "similar_to_firm" && seedProfile) {
+        const candidate = await prisma.firm.findUniqueOrThrow({ where: { id: outcome.firmId } });
+        const score = similarityScore(seedProfile, {
+          strategies: candidate.strategies as Record<string, string[]>,
+          focusAreas: candidate.focusAreas as Record<string, string[]>,
+          hqLocation: candidate.hqLocation,
+          aumValue: candidate.aumValue ? Number(candidate.aumValue) : null,
+          targetMarkets: candidate.targetMarkets,
+        });
+        if (score < SIMILARITY_THRESHOLD) {
+          await discardFirm(outcome.firmId);
+          researchWarnings.push(`${name}: skipped — only ${Math.round(score * 100)}% similar to the seed firm.`);
+          continue;
+        }
       }
 
       firmsAdded++;
