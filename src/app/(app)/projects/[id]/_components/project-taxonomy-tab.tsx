@@ -6,6 +6,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2, Sparkles, Save } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import { ProjectAddFirmModal } from "./project-add-firm-modal";
 
 type Taxonomy = Record<string, string[]>;
 
@@ -28,6 +29,7 @@ export function ProjectTaxonomyTab({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [addFirmOpen, setAddFirmOpen] = useState(false);
 
   useEffect(() => {
     setDraft(initialTaxonomy);
@@ -126,6 +128,20 @@ export function ProjectTaxonomyTab({
 
   return (
     <div className="space-y-4 pt-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-text-secondary">
+          Add firms to this project using its own taxonomy, separate from the main Firm Database's Add Firm flow.
+        </p>
+        <Button
+          size="sm"
+          onClick={() => setAddFirmOpen(true)}
+          disabled={!confirmedAt || !initialTaxonomy}
+          title={!confirmedAt ? "Confirm & save a taxonomy below first" : undefined}
+        >
+          <Plus className="h-3.5 w-3.5" /> Add Firm
+        </Button>
+      </div>
+
       <div className="rounded-lg border border-border bg-surface p-4">
         <p className="mb-2 text-sm font-medium text-text-primary">Project Focus Description</p>
         <p className="mb-2 text-xs text-text-secondary">
@@ -187,6 +203,14 @@ export function ProjectTaxonomyTab({
           </div>
         </div>
       )}
+
+      <ProjectAddFirmModal
+        open={addFirmOpen}
+        onOpenChange={setAddFirmOpen}
+        projectId={projectId}
+        taxonomy={initialTaxonomy}
+        onDone={onSaved}
+      />
     </div>
   );
 }
