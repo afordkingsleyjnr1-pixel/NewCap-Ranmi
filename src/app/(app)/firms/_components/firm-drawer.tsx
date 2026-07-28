@@ -13,6 +13,7 @@ import { Loader2, RefreshCw, UserSearch, Trash2, ExternalLink, Search, Pencil, P
 import { PopulateModal } from "./populate-modal";
 import { EditContactModal, type EditableContact } from "./edit-contact-modal";
 import { AddContactModal } from "./add-contact-modal";
+import { AddToProjectModal } from "./add-to-project-modal";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 
 interface Props {
@@ -30,6 +31,7 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
   const [findContactWarnings, setFindContactWarnings] = useState<string[]>([]);
   const [editingContact, setEditingContact] = useState<EditableContact | null>(null);
   const [addContactOpen, setAddContactOpen] = useState(false);
+  const [addToProjectOpen, setAddToProjectOpen] = useState(false);
   const [domainDraft, setDomainDraft] = useState("");
   const [savingDomain, setSavingDomain] = useState(false);
 
@@ -220,6 +222,9 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
               )}
               {firm.classificationStatus === "needs_review" && <Pill color="amber">Needs classification review</Pill>}
               <div className="ml-auto flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setAddToProjectOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Add to Project
+                </Button>
                 <Button size="sm" variant="outline" onClick={() => setPopulateOpen(true)}>
                   Find Similar Firms
                 </Button>
@@ -536,6 +541,13 @@ export function FirmDrawer({ firmId, onClose, onChanged }: Props) {
           load();
           onChanged();
         }}
+      />
+      <AddToProjectModal
+        open={addToProjectOpen}
+        onOpenChange={setAddToProjectOpen}
+        firmId={firmId}
+        firmName={firm?.name}
+        onAdded={onChanged}
       />
       {nextStepModals}
     </>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/input";
 import { Pill, TagPill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Search, X, Sparkles, Bell } from "lucide-react";
+import { Plus, Search, X, Sparkles, Bell, Building2, FolderKanban, Tags } from "lucide-react";
 import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
 import { AddFirmModal } from "./_components/add-firm-modal";
@@ -31,6 +31,9 @@ export default function FirmsPage() {
   const [classificationStatus, setClassificationStatus] = useState("");
   const [domainResolutionStatus, setDomainResolutionStatus] = useState("");
   const [withinMandate, setWithinMandate] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
+  const [showBy, setShowBy] = useState<"none" | "all" | "project" | "classification">("none");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [addOpen, setAddOpen] = useState(false);
   const [populateOpen, setPopulateOpen] = useState(false);
@@ -43,7 +46,17 @@ export default function FirmsPage() {
 
   const searchParams = useSearchParams();
 
-  const hasFilters = !!(search || strategyParent || focusParent || stage || sourceType || classificationStatus || domainResolutionStatus || withinMandate);
+  const hasFilters = !!(
+    search ||
+    strategyParent ||
+    focusParent ||
+    stage ||
+    sourceType ||
+    classificationStatus ||
+    domainResolutionStatus ||
+    withinMandate ||
+    projectId
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,19 +69,33 @@ export default function FirmsPage() {
     if (classificationStatus) qs.set("classificationStatus", classificationStatus);
     if (domainResolutionStatus) qs.set("domainResolutionStatus", domainResolutionStatus);
     if (withinMandate) qs.set("withinMandate", withinMandate);
+    if (projectId) qs.set("projectId", projectId);
     const res = await fetch(`/api/firms?${qs.toString()}`);
     const data = await res.json();
     setFirms(data.firms ?? []);
     setLoading(false);
-  }, [search, strategyParent, focusParent, stage, sourceType, classificationStatus, domainResolutionStatus, withinMandate]);
+  }, [search, strategyParent, focusParent, stage, sourceType, classificationStatus, domainResolutionStatus, withinMandate, projectId]);
+
+  // Firm Database doesn't auto-load — the user picks a "Show By" entry
+  // point first (Global Database / By Project / By Classification), and
+  // only then does the (potentially large) grid fetch and render.
+  useEffect(() => {
+    if (showBy === "none") return;
+    load();
+  }, [load, showBy]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    fetch("/api/projects")
+      .then((r) => r.json())
+      .then((d) => setProjects((d.projects ?? []).map((p: { id: string; name: string }) => ({ id: p.id, name: p.name }))));
+  }, []);
 
   useEffect(() => {
     const openId = searchParams.get("open");
-    if (openId) setOpenFirmId(openId);
+    if (openId) {
+      setOpenFirmId(openId);
+      setShowBy("all");
+    }
   }, [searchParams]);
 
   function clearFilters() {
@@ -80,6 +107,7 @@ export default function FirmsPage() {
     setClassificationStatus("");
     setDomainResolutionStatus("");
     setWithinMandate("");
+    setProjectId("");
   }
 
   function toggleSelect(id: string) {
@@ -109,14 +137,90 @@ export default function FirmsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Firms Database</h1>
-          <p className="text-sm text-text-secondary">{firms.length} firms</p>
+          <p className="text-sm text-text-secondary">
+            {showBy === "none" ? "Choose how you'd like to view firms" : `${firms.length} firms`}
+          </p>
         </div>
         <Button onClick={() => setAddOpen(true)}>
           <Plus className="h-4 w-4" /> Add Firm
         </Button>
       </div>
 
+      {showBy === "none" && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <button
+            onClick={() => setShowBy("all")}
+            className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 text-left transition-colors hover:border-accent hover:bg-status-blue-bg"
+          >
+            <Building2 className="h-6 w-6 text-accent" />
+            <div>
+              <p className="font-medium text-text-primary">Global Database</p>
+              <p className="mt-1 text-sm text-text-secondary">Browse every firm in the database.</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setShowBy("project")}
+            className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 text-left transition-colors hover:border-accent hover:bg-status-blue-bg"
+          >
+            <FolderKanban className="h-6 w-6 text-accent" />
+            <div>
+              <p className="font-medium text-text-primary">By Project</p>
+              <p className="mt-1 text-sm text-text-secondary">Show only firms attached to a specific project.</p>
+            </div>
+          </button>
+          <button
+            onClick={() => setShowBy("classification")}
+            className="flex flex-col items-start gap-3 rounded-lg border border-border bg-surface p-6 text-left transition-colors hover:border-accent hover:bg-status-blue-bg"
+          >
+            <Tags className="h-6 w-6 text-accent" />
+            <div>
+              <p className="font-medium text-text-primary">By Classification</p>
+              <p className="mt-1 text-sm text-text-secondary">Show firms by classification status (classified, needs review, unclassified).</p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {showBy === "project" && !projectId && (
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <p className="mb-2 text-sm font-medium text-text-primary">Select a project</p>
+          <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-72">
+            <option value="">Choose a project…</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+
+      {showBy === "classification" && !classificationStatus && (
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <p className="mb-2 text-sm font-medium text-text-primary">Select a classification status</p>
+          <Select value={classificationStatus} onChange={(e) => setClassificationStatus(e.target.value)} className="w-72">
+            <option value="">Choose a status…</option>
+            <option value="classified">Classified</option>
+            <option value="needs_review">Needs Review</option>
+            <option value="unclassified">Unclassified</option>
+          </Select>
+        </div>
+      )}
+
+      {showBy !== "none" && (showBy !== "project" || projectId) && (showBy !== "classification" || classificationStatus) && (
+      <>
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            setShowBy("none");
+            clearFilters();
+            setFirms([]);
+          }}
+        >
+          <X className="h-3.5 w-3.5" /> Change View
+        </Button>
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
           <Input placeholder="Search firms…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48 pl-8" />
@@ -168,6 +272,14 @@ export default function FirmsPage() {
           <option value="yes">Within</option>
           <option value="no">Outside</option>
           <option value="unconfirmed">Unconfirmed</option>
+        </Select>
+        <Select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-44">
+          <option value="">All Projects</option>
+          {projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+            </option>
+          ))}
         </Select>
 
         {hasFilters && (
@@ -293,6 +405,8 @@ export default function FirmsPage() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
       <AddFirmModal open={addOpen} onOpenChange={setAddOpen} onDone={load} />
       <PopulateModal
