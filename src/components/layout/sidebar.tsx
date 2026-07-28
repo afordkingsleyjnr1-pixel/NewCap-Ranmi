@@ -16,11 +16,11 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/firms", label: "Firms Database", icon: Building2 },
+  { href: "/projects", label: "Projects", icon: ListChecks },
   { href: "/messages", label: "Messages", icon: Mail },
   { href: "/contacts", label: "Contacts", icon: Users },
   { href: "/crm", label: "CRM Pipeline", icon: KanbanSquare },
-  { href: "/projects", label: "Projects", icon: ListChecks },
+  { href: "/firms", label: "Firms Database", icon: Building2 },
   { href: "/reports", label: "Reports", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
