@@ -516,3 +516,88 @@ added twice under slightly different research runs.
   permission Reclassify All requires), triggered from the individual firm's drawer. Same
   underlying `classifyFirm`/`applyClassification` call, just scoped to one firm and
   reachable by a different, more common permission level.
+
+## 22. Sixth pass — exhaustive audit (every remaining UI component, lib util, route, seed, dependency)
+
+This pass read every previously-unread `_components/*.tsx` file, `session.ts`, `crypto.ts`,
+`utils.ts`, `taxonomy.ts`, every remaining API route, `prisma/seed.ts`, and `package.json`.
+It surfaced one genuine security-relevant behavior and a cluster of real business rules —
+distinct from documentation gaps, several of these are things a rebuild from this doc alone
+would get functionally wrong.
+
+**Auth — a real gap, not just a documentation one.** `src/lib/session.ts`'s
+`getCurrentUser()` falls back to the first `isAccountOwner: true` user (bootstrapping one,
+`sydney@adcapital-partners.com`, if none exists) whenever the session cookie is missing or
+invalid — **at any time, not only on a fresh database**. §15 describes login as a real
+gate; it isn't one as currently implemented. Flagging this as a behavior worth fixing, not
+just documenting, since it means an invalid/absent cookie silently authenticates as the
+account owner rather than redirecting to `/login`.
+
+**Other real gaps found:**
+- **At-rest encryption** (`src/lib/crypto.ts`): OAuth tokens and the Hunter.io key are
+  AES-256-GCM encrypted before storage, requiring a 32-byte-hex `TOKEN_ENCRYPTION_KEY` env
+  var (throws on startup/use if missing/wrong length) — never mentioned anywhere above.
+- **`prisma/seed.ts` seeds only Admin + Viewer roles** (no Editor), one user
+  (`sydney@adcapital-partners.com` / `changeme123`), default Mandate ($1B–$15B) and
+  AppSettings — **no demo firms, contacts, or projects at all**. A fresh install is
+  data-empty by design, not partially empty.
+- **User deactivation is gated**: blocked until the caller supplies a replacement owner for
+  any firms the user owns (`REASSIGN_REQUIRED` + count; new owner gets a
+  `firms_reassigned` notification).
+- **User deletion is restricted**: the account owner can never be deleted; an active user
+  must be deactivated first; a deactivated user can still fail to delete if they have
+  historical records (tasks/activity/messages) tied to them — stays "deactivated"
+  permanently in that case.
+- **A user's email is only editable while their invite is still `pending_invite`** — locked
+  once active, since it's also the login identity.
+- **Editing a role fires `role_changed` to every user on that role**; deleting a role
+  requires zero assigned users; the account owner's role can never be changed via edit-user.
+- **Project "Assign member" invites always create a Viewer-role account** for an unknown
+  email — different from the Settings → Team invite flow, which lets the inviter pick any
+  role. Project-level invite = fixed least-privilege; workspace-level invite = admin-chosen.
+- **Contact deletion is conditional**: hard-deletes only if the contact has zero
+  `EmailThread`s/`Meeting`s; otherwise soft-deletes (`removedAt`). Never documented — only
+  the analogous firm pattern was.
+- **Task deletion is a genuine hard delete**, no soft-delete/recovery path, unlike firms
+  and (see below) message threads.
+- **Domain-confirmation gate in the Firm Drawer**: while `domainResolutionStatus !==
+  "resolved"`, Find Contact/Find Email are blocked behind a banner; manually saving a
+  domain force-sets the status to `resolved`.
+- **A right-click context menu on the Firms Database grid** (`firm-context-menu.tsx`) is an
+  entirely separate interaction surface: Edit, Add to Project, a nested Assign submenu
+  (owner, plus nested Add Task/Add Note), Find Similar Firms, Visit Website, Delete.
+- **"Clear Override"** is a real, dedicated clickable control for reversing a manual
+  Within-Mandate override — not just an implied side effect of re-editing.
+- **AUM display formatting rule** (`formatAum`): ≥$1B → `$X.XXB` (trailing zeros
+  stripped), ≥$1M → `$XM` (no decimals); `unconfirmed`/`dated` confidence prefixes `~` and
+  suffixes `*` (e.g. `~$2.4B*`).
+- **Add Firm's modal has a second, undocumented "By Strategy & Focus Area" tab** that posts
+  straight to the same `/api/populate` `by_criteria` mode — a second UI entry point into
+  Populate, not a separate feature.
+- **`database_wide` Populate's actual bounds**: samples against the 10 most recently added
+  firms, adds up to 20 new firms per run.
+- **Project-scoped Add Firm** (`ProjectAddFirmModal`) is a third variant of the same
+  pattern: by-name (auto-attaches to the project) or by-criteria using the *project's own*
+  taxonomy instead of the global one.
+- **Settings → Taxonomy's "Add Funds Category"** button (Strategies tab only): one click
+  adds a "Funds" parent and immediately AI-generates its children via the same
+  `generate-children` endpoint.
+- **The Projects Actions tab is under-described** — it's not just Bulk Email. It offers
+  seven bulk actions over a multi-select of firms: Send Email/Follow-Up/Term Sheet,
+  Schedule Meeting (single-selection only), Add Note (logs to every selected firm's
+  Activity tab), Change CRM Stage, Assign Owner — all via `Promise.all` over the same
+  single-firm endpoints documented elsewhere.
+- **Message threads require a two-step delete**: `DELETE /api/messages/[id]` rejects the
+  request unless the thread is already in the Bin (`deletedAt` set) — same soft-delete →
+  purge shape as firms, never stated for threads.
+- **Notification dismissal is a hard delete**, not a read/archive toggle — both "Clear All"
+  and single-dismiss permanently remove the row(s), not just flip `isRead`.
+- **Meeting outcome has three branches, not a binary**: In Discussion/Due Diligence,
+  Declined, or **Reschedule** (keeps the firm at `meeting_scheduled` with a new date/time,
+  doesn't advance the pipeline at all) — §6 undersold this as just "asks for the outcome."
+
+**Explicitly not reported as gaps** (checked and ruled not worth documenting): an unused
+`zod` dependency (imported nowhere), a Playwright devDependency with no actual `.spec.ts`/
+config files behind it (no e2e suite exists to describe), and minor UI-only details
+(Cc/Bcc fields, forward-message prefill, pagination sizes) that don't constitute business
+rules.
