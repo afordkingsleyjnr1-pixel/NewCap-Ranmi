@@ -601,3 +601,40 @@ account owner rather than redirecting to `/login`.
 config files behind it (no e2e suite exists to describe), and minor UI-only details
 (Cc/Bcc fields, forward-message prefill, pagination sizes) that don't constitute business
 rules.
+
+## 23. The design system / UI component layer (previously undocumented entirely)
+
+Every section above describes *what the app does*; none of it describes *what it's built
+with visually*. A rebuild needs this too.
+
+**Design tokens** (`src/app/globals.css`) — CSS custom properties, not hardcoded Tailwind
+colors, so the palette is a single source of truth: `--color-surface` (white),
+`--color-page` (`#f7f8fa`, the app background), `--color-primary` (`#1f3864`, dark navy —
+the brand color) + `--color-primary-hover`, `--color-accent` (`#2e5fcc`, brighter blue for
+links/active states), `--color-text-primary`/`--color-text-secondary`, `--color-border`.
+Plus a **status color family** used everywhere something needs a semantic state color —
+green/amber/red/blue/gray, each with a paired `-bg` tint (e.g. `--color-status-green` +
+`--color-status-green-bg`) — this is the exact palette `STAGE_COLORS` (§6, CRM kanban) and
+badge components draw from, so stage colors, classification-status badges, and
+domain-resolution-status indicators all visually share one semantic language instead of
+each picking its own colors.
+
+**Shared UI primitives** (`src/components/ui/`) — a small local component kit, not a
+third-party library: `button`, `input` (+ a `Select` variant in the same file), `card`,
+`badge`, `checkbox`, `avatar`, `tabs`, `accordion`, `dropdown-menu`, `drawer` (the sliding
+side-panel pattern behind the Firm Drawer, §7), `password-input`. Two are worth calling out
+specifically since they encode real behavior, not just styling:
+- **`AumInput`** — lets a user type "1" and pick "Billion" instead of nine zeros; internally
+  splits/recombines into the same raw-USD string the rest of the app already expects
+  (`aumValue`), and only re-derives its displayed figure/unit from external value changes
+  (initial load, reset) — while the user is actively typing, their own input drives display,
+  not a round-trip through the parent's state.
+- **`StepProgress`** — the horizontal numbered-step tracker (green check when passed,
+  pulsing current step, filling connector line) behind the live progress UI for Add Firm
+  and Populate's NDJSON streaming (§17/§18) — this is the actual visual component that
+  progress events (`ndjson-server.ts`) render into, not just an abstract "progress bar."
+
+**Layout shell** (`src/components/layout/`) — `sidebar.tsx` (fixed nav — Dashboard,
+Projects, Messages, Contacts, CRM Pipeline, Firms Database, Reports, Settings — with
+active-route highlighting) and `topbar.tsx` (the Notification Center bell/dropdown, §13,
+lives here, not in the sidebar).
