@@ -50,7 +50,7 @@ export async function classifyFirm(params: {
     `Classify this investment manager: ${params.firmName}`,
     params.domain ? `Website domain: ${params.domain}` : "No known website domain — search to find it first.",
     params.strategyDetail ? `\nExisting research notes on file:\n${params.strategyDetail}` : "",
-    "\nSearch the firm's website (About, Investment Strategy, Portfolio, Funds, Team, Investor Relations, News, Transactions pages) and respond with the strict JSON classification only.",
+    "\nUse web_search sparingly (once, if a domain isn't already known) to locate the firm's relevant pages (About, Investment Strategy, Portfolio, Funds, Team, Investor Relations, News, Transactions), then use web_fetch to retrieve those pages directly and read the full content rather than running more searches. Respond with the strict JSON classification only.",
   ].join("\n");
 
   const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
@@ -60,7 +60,8 @@ export async function classifyFirm(params: {
     cacheableSystemExtra: taxonomyReference,
     user: userMessage,
     maxTokens: 2048,
-    maxUses: 4,
+    maxUses: 1,
+    maxFetches: 3,
   });
   const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
 

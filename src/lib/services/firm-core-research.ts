@@ -17,6 +17,8 @@ import { rankByCapitalMarketsPriority } from "./contact-ranking";
 // every single call.
 const CORE_RESEARCH_SYSTEM_PROMPT = `You are a research analyst for an institutional capital-introduction platform. For the given investment manager, do ONE round of web research covering four things at once: (1) their official corporate website domain, (2) their current AUM, (3) a classification of their investment strategies and focus areas, (4) the best-fit capital-raising contact(s) at the firm.
 
+RESEARCH METHOD: Use web_search sparingly — ideally just once — to resolve the official domain and identify which of the firm's own pages (About, Investment Strategy, Investor Relations, Team/Leadership, News) are likely to have the AUM figure, the classification detail, and the contact names. Then use web_fetch to retrieve those pages directly and read the full content, rather than running additional searches to piece the answer together from snippets. Fetching the actual page gives you complete, reliable text for AUM figures and contact names — trust it over search-result snippets.
+
 1. DOMAIN: Search the web and identify the single, correct, official domain. Never guess a plausible-looking domain when you are not confident — return status "ambiguous" (multiple similarly-named firms) or "unresolved" (no clear web presence) instead of "resolved".
 
 2. AUM: Once you know their site, find the clearest, most current AUM figure from their About/Overview/Investment Strategy/Investor Relations pages or other reliable sources. Never fabricate a number — if nothing reliable is found, aum_value_usd must be null and confidence "unconfirmed".
@@ -78,7 +80,8 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
     cacheableSystemExtra: taxonomyReference,
     user: `Research and classify this investment manager: ${params.firmName}`,
     maxTokens: 3072,
-    maxUses: 7,
+    maxUses: 2,
+    maxFetches: 4,
   });
   const parsed = extractJson<{
     domain?: string | null;
