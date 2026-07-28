@@ -492,3 +492,27 @@ added twice under slightly different research runs.
   connected mailbox directly (not as a reply to anything the platform sent) — creates the
   thread from scratch, then routes through the same notification path as an ordinary
   reply.
+
+## 21. Fifth pass — the "zero external keys" configuration design, and single-firm reclassify
+
+- **`/api/settings/app` is the platform's integration-status surface**, and it reflects a
+  real architectural principle stated in the README that this doc never actually
+  explained: **every external integration exposes its own `isXConfigured()` check**
+  (`isAnthropicConfigured`, `isHunterConfigured`, `isGoogleConfigured`,
+  `isMicrosoftConfigured`), and this route aggregates all four into one status object
+  alongside `AppSettings` (follow-up threshold, whether a Hunter key is saved). The
+  platform is deliberately designed to **run and be fully navigable with zero keys
+  configured** — Add Firm, Populate, Find Contact, Send Email all surface a clear
+  "not configured" state in the UI rather than silently failing or faking data, because
+  every AI/enrichment/OAuth call site checks its own `isXConfigured()` guard before
+  attempting the real call. This is a deliberate degrade-gracefully design decision, not
+  an accident of missing error handling.
+- **`/api/email-connections`** — simple GET of the current user's own `EmailConnection`
+  (provider, connected address, status) — what Settings → Account/Integrations actually
+  reads to show "Gmail connected as X" vs. "not connected," separate from the
+  `/api/auth/google/connect` OAuth-initiation route.
+- **Single-firm Reclassify is its own route**, distinct from Reclassify All (§18):
+  `POST /api/firms/[id]/reclassify` — gated by `edit_firms` (not `manage_settings`, the
+  permission Reclassify All requires), triggered from the individual firm's drawer. Same
+  underlying `classifyFirm`/`applyClassification` call, just scoped to one firm and
+  reachable by a different, more common permission level.
