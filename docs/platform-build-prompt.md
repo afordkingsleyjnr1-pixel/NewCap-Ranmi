@@ -638,3 +638,34 @@ specifically since they encode real behavior, not just styling:
 Projects, Messages, Contacts, CRM Pipeline, Firms Database, Reports, Settings — with
 active-route highlighting) and `topbar.tsx` (the Notification Center bell/dropdown, §13,
 lives here, not in the sidebar).
+
+## 24. Deployment/infrastructure layer (previously entirely unaddressed)
+
+- **No `middleware.ts` exists.** Route protection is enforced per-route inside each API
+  handler (`getCurrentUser()` + `requirePermission()`), not centrally — reinforcing the
+  §22 finding that auth is a per-call check, not a gate every request passes through
+  first. A rebuild should be explicit about whether it wants centralized middleware or is
+  intentionally keeping per-route checks.
+- **`vercel.json`** defines the operational schedule and timeout overrides the two cron
+  jobs (§14) and several AI-heavy routes actually need in production:
+  - Cron schedules: `follow-up-check` daily at **13:00 UTC**, `renew-watches` daily at
+    **06:00 UTC** — not just "daily," specific times.
+  - `maxDuration` overrides (default Vercel function timeout is too short for these):
+    **300s** for `POST /api/firms` (bulk Add Firm), `/api/populate`, and
+    `/api/settings/reclassify-all`; **60s** for `/api/firms/[id]/find-contact`,
+    `/api/firms/[id]/reclassify`, and `/api/contacts/[id]/find-email`. Any of these
+    running with a default (shorter) timeout would truncate mid-research.
+- **Full required/optional env var list** (`.env.example`) — some of these were referenced
+  individually earlier but never listed together: `DATABASE_URL`, `ANTHROPIC_API_KEY`,
+  `HUNTER_API_KEY`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI`,
+  `MICROSOFT_CLIENT_ID`/`MICROSOFT_CLIENT_SECRET`/`MICROSOFT_REDIRECT_URI`/
+  `MICROSOFT_TENANT_ID` (defaults to `"common"`), **`AUTH_SECRET`** (session/JWT signing —
+  not previously mentioned at all), `TOKEN_ENCRYPTION_KEY` (§22's AES-256-GCM key,
+  generated via `openssl rand -hex 32`), `CRON_SECRET` (§14).
+- **No custom `error.tsx`/`loading.tsx`/`not-found.tsx`** anywhere in `src/app` — the app
+  relies entirely on Next.js's default error/loading/404 handling; there is no bespoke
+  error-boundary or skeleton-loading design to carry over in a rebuild.
+- **Root layout is minimal**: Inter font via `next/font/google`, static page
+  `title`/`description` metadata ("NewCap Ranmi — Capital Introduction CRM"), no favicon
+  customization, no analytics/monitoring script, no client-side providers wrapping the
+  tree (theme, query-client, etc. are set up per-page/per-feature if at all, not globally).
