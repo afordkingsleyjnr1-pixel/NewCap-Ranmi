@@ -152,6 +152,27 @@ enum DataScope {
   owned_firms_only
 }
 
+enum TaxonomyKind {
+  strategy
+  focus_area
+}
+
+// The editable, DB-backed source of truth for the global Strategies/Focus
+// Areas taxonomy (Settings → Classification & Taxonomy). One row per kind;
+// data is the same { "Parent Group": ["Child", ...] } shape the AI prompts
+// and picker UIs already expect, so every call site just swaps its static
+// import for a fetch/service call instead of changing shape. Seeded from
+// the STRATEGIES_TAXONOMY/FOCUS_AREAS_TAXONOMY defaults in lib/taxonomy.ts
+// on first read if no row exists yet — see lib/services/taxonomy-store.ts.
+model TaxonomySet {
+  id        String       @id @default(uuid())
+  kind      TaxonomyKind @unique
+  data      Json
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  @@map("taxonomy_sets")
+}
+
 enum ProjectStatus {
   active
   on_hold

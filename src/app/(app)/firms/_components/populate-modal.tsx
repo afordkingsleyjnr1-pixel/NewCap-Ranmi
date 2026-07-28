@@ -8,7 +8,7 @@ import { Pill } from "@/components/ui/badge";
 import { StepProgress } from "@/components/ui/step-progress";
 import { AumInput } from "@/components/ui/aum-input";
 import { TaxonomyPicker } from "./taxonomy-picker";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 import { Loader2 } from "lucide-react";
 import { readNdjsonStream } from "@/lib/ndjson-client";
 import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
@@ -42,6 +42,7 @@ export function PopulateModal({
   initialStrategies?: Record<string, string[]>;
   initialFocusAreas?: Record<string, string[]>;
 }) {
+  const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [strategies, setStrategies] = useState<Record<string, string[]>>(initialStrategies ?? {});
   const [focusAreas, setFocusAreas] = useState<Record<string, string[]>>(initialFocusAreas ?? {});

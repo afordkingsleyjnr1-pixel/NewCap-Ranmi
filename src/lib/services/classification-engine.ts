@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { runWebResearch, extractJson } from "@/lib/anthropic";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY, validateTaxonomySelection } from "@/lib/taxonomy";
+import { validateTaxonomySelection } from "@/lib/taxonomy";
+import { getBothTaxonomies } from "@/lib/services/taxonomy-store";
 
 // Section 5.4 — verbatim system prompt used by the Classification Engine.
 const CLASSIFICATION_SYSTEM_PROMPT = `You are an Institutional Investment Manager Classification Engine. Your purpose is to analyze investment managers and populate a structured database with consistent, standardized classifications. The objective is not to copy marketing language from a firm's website, but to interpret what the firm actually does and map it into the predefined taxonomy below. The database will be used as a professional institutional manager sourcing platform, so consistency and accuracy are more important than maximizing the number of tags.
@@ -19,14 +20,10 @@ Respond with strict JSON only, no prose, shaped exactly as:
 {"strategies": {"Parent Group": ["Child Strategy", ...]}, "focus_areas": {"Parent Group": ["Child Focus Area", ...]}}
 Use ONLY parent/child names that exist in the taxonomy provided in the user message. If you cannot confidently classify anything, return {"strategies": {}, "focus_areas": {}}.`;
 
-function buildTaxonomyReference(): string {
-  return [
-    "STRATEGIES TAXONOMY:",
-    JSON.stringify(STRATEGIES_TAXONOMY, null, 2),
-    "",
-    "FOCUS AREAS TAXONOMY:",
-    JSON.stringify(FOCUS_AREAS_TAXONOMY, null, 2),
-  ].join("\n");
+async function buildTaxonomyReference(): Promise<{ text: string; strategies: Record<string, string[]>; focusAreas: Record<string, string[]> }> {
+  const { strategies, focusAreas } = await getBothTaxonomies();
+  const text = ["STRATEGIES TAXONOMY:", JSON.stringify(strategies, null, 2), "", "FOCUS AREAS TAXONOMY:", JSON.stringify(focusAreas, null, 2)].join("\n");
+  return { text, strategies, focusAreas };
 }
 
 export interface ClassificationResult {
@@ -56,17 +53,19 @@ export async function classifyFirm(params: {
     "\nSearch the firm's website (About, Investment Strategy, Portfolio, Funds, Team, Investor Relations, News, Transactions pages) and respond with the strict JSON classification only.",
   ].join("\n");
 
+  const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
+
   const raw = await runWebResearch({
     system: CLASSIFICATION_SYSTEM_PROMPT,
-    cacheableSystemExtra: buildTaxonomyReference(),
+    cacheableSystemExtra: taxonomyReference,
     user: userMessage,
     maxTokens: 2048,
     maxUses: 4,
   });
   const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
 
-  const stratResult = validateTaxonomySelection(parsed?.strategies, STRATEGIES_TAXONOMY);
-  const focusResult = validateTaxonomySelection(parsed?.focus_areas, FOCUS_AREAS_TAXONOMY);
+  const stratResult = validateTaxonomySelection(parsed?.strategies, strategiesTaxonomy);
+  const focusResult = validateTaxonomySelection(parsed?.focus_areas, focusAreasTaxonomy);
 
   const hasAny = Object.keys(stratResult.valid).length > 0 || Object.keys(focusResult.valid).length > 0;
 

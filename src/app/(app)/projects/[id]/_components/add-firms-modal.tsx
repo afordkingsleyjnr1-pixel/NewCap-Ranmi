@@ -8,7 +8,7 @@ import { Pill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { TaxonomyPicker } from "../../../firms/_components/taxonomy-picker";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 
 const PAGE_SIZE = 50;
 
@@ -54,6 +54,7 @@ export function AddFirmsModal({
   existingFirmIds: string[];
   onAdded: () => void;
 }) {
+  const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
   const [mode, setMode] = useState<Mode>("search");
   const [firms, setFirms] = useState<FirmOption[]>([]);
   const [search, setSearch] = useState("");
