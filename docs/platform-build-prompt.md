@@ -398,3 +398,40 @@ the platform uses elsewhere for research gaps.
 **Service:** `src/lib/services/dedupe.ts` — `findDuplicate()` checks only `name` + `domain`
 before Add Firm/Populate creates a new row, preventing the same institution from being
 added twice under slightly different research runs.
+
+## 18. Second pass — corrections and remaining gaps
+
+- **`firm-pipeline.ts` is the actual shared orchestrator**, not `firm-core-research.ts`
+  alone. §7 undersold this: the single combined Claude research call
+  (`researchFirmCore`) is one step inside `runFirmResearchPipeline()`, which also runs
+  Hunter.io email enrichment, derives the Within-Mandate flag
+  (`deriveWithinMandate`/`getMandateSettings`), and creates the firm's first pending task
+  — and every AI/Hunter step degrades independently (a Hunter billing error doesn't abort
+  domain/AUM research, etc.), surfaced back as a non-fatal `researchWarning` rather than
+  failing the whole Add Firm call. **This exact pipeline is reused verbatim by
+  Populate** (§7) — Add Firm and "Find Similar"/"By Criteria" are the same research
+  machinery with a different discovery step in front of it, not two separate
+  implementations.
+- **Streaming mechanism** (`src/lib/ndjson-server.ts`): the "live progress" behavior
+  mentioned for Add Firm's bulk NDJSON response is its own small utility — wraps a
+  long-running pipeline in a `ReadableStream`, emits one JSON object per line as work
+  progresses, and always terminates with `{"type":"done"}` or `{"type":"error"}`. Auth/
+  permission failures happen before streaming starts, so they still return a normal HTTP
+  error status; only the research work itself is streamed as a 200 with an NDJSON body.
+- **Hunter.io key resolution** (`hunter.ts`): the API key can come from either an
+  environment variable (applies platform-wide) or an encrypted value saved via
+  Settings → Account Settings — the env var wins if both are set, so a deployment-level
+  key can't be silently shadowed by a per-user Settings entry.
+- **Reclassify All** (`/api/settings/reclassify-all`, `manage_settings` permission): batch
+  re-runs `classifyFirm`/`applyClassification` (§7) across every non-deleted firm, reports
+  how many firms' Strategies/Focus Areas actually changed — respects the same
+  manual-edit-preservation rule as a single-firm reclassify.
+- **CSV export exact shape** (`/api/reports/export`, `export_data` permission): columns are
+  Firm Name, HQ, Strategies, Focus Areas, AUM, Within Mandate, CRM Stage, Owner, Primary
+  Contact, Email, Email Status — one row per firm, values CSV-escaped
+  (`toCsvValue`/quoted on comma/quote/newline).
+- **Permanent purge is a genuine hard delete** (`/api/firms/[id]/purge`,
+  `manage_settings` permission, only reachable from an already-soft-deleted firm): removes
+  everything hanging off that `firmId` and frees the name/domain from future dedupe
+  checks — unlike the soft-delete path (Recently Deleted), this is explicitly not
+  reversible.
