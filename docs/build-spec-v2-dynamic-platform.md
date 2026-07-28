@@ -2,6 +2,16 @@
 
 ## Build Spec v2 (supersedes the fixed real-estate/firm model in v1)
 
+### Core mandate & promise
+
+> Ranmi helps organizations find the right opportunities, identify the right people,
+> build relationships, and execute growth activities — all in one intelligent workspace.
+
+Every part of this spec should trace back to one of these four pillars — **Find
+Opportunities, Identify People, Build Relationships, Execute Growth** — rather than to
+any one industry's workflow (capital introduction, recruiting, partnerships, sales, etc.
+are all just different projects running on the same four pillars).
+
 ### 0. Why this rebuild exists
 
 The current platform (NewCap Ranmi / "RE Manager Capital-Introduction BD & CRM") hardcodes
@@ -155,17 +165,21 @@ strategy, contacts). This becomes a **prompt generator**:
 ### 5. Growth Score — full definition
 
 Composite, 0–100, recalculated per period (default trailing 30 days vs. prior 30 days),
-displayed with trend arrow:
+displayed with trend arrow. Each of the four components maps directly to one pillar of
+the core mandate, so the score reads as "how well is this project executing on Ranmi's
+promise" rather than a generic deal-pipeline metric:
 
-| Component | Weight | Definition |
-|---|---|---|
-| Pipeline Velocity | 35% | stage-advances / total active opportunities in period |
-| New Relationship Rate | 25% | new entities + new contacts this period vs. prior period |
-| Engagement Rate | 20% | % of active opportunities in "mid-to-late" pipeline stages (project-relative: stages past the halfway point of the pipeline's defined order, not hardcoded names) |
-| Conversion Rate | 20% | opportunities marked Won / opportunities resolved (Won + explicitly Lost) in period |
+| Pillar | Component | Weight | Definition |
+|---|---|---|---|
+| Find Opportunities | Opportunity Discovery Rate | 25% | new Opportunities created this period vs. prior period |
+| Identify People | People Identification Rate | 25% | new Contacts identified/linked to Entities this period vs. prior period |
+| Build Relationships | Relationship Depth | 25% | % of active Opportunities that have advanced past the pipeline's midpoint (project-relative: stages past the halfway point of the project's defined stage order, not hardcoded names) — i.e. real engagement, not just top-of-funnel volume |
+| Execute Growth | Execution Rate | 25% | growth activities completed this period (Tasks completed + Opportunities resolved as Won) / activities due or opportunities active in period |
 
-Each component is normalized to 0–100 before weighting. Org-level Growth Score (if shown)
-averages across the org's active projects, weighted by each project's opportunity volume.
+Each component is normalized to 0–100 before weighting (equal weight by default, since all
+four pillars are equally core to the mandate — a project owner may later be allowed to
+re-weight, but 25/25/25/25 is the default). Org-level Growth Score (if shown) averages
+across the org's active projects, weighted by each project's total activity volume.
 
 ---
 
