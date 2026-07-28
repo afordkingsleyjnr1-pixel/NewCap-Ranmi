@@ -42,6 +42,19 @@ Respond with strict JSON only, no prose, shaped exactly as:
 }
 If you cannot confidently classify anything, use {} for strategies/focus_areas rather than guessing. If you cannot confidently find a contact, use [] rather than guessing.`;
 
+// The prompt asks for strict YYYY-MM-DD, but the model doesn't always
+// comply (e.g. "Q1 2025", "recent") — `new Date(...)` on those inputs
+// doesn't throw, it silently produces an Invalid Date, which then fails
+// at the Prisma write with an opaque error. Validate here so a malformed
+// date is treated the same as "not found" (null) instead of surfacing as
+// a hard failure that aborts the whole firm add.
+function parseAumAsOfDate(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  return Number.isNaN(new Date(trimmed).getTime()) ? null : trimmed;
+}
+
 async function buildTaxonomyReference(): Promise<{ text: string; strategies: Record<string, string[]>; focusAreas: Record<string, string[]> }> {
   const { strategies, focusAreas } = await getBothTaxonomies();
   const text = ["STRATEGIES TAXONOMY:", JSON.stringify(strategies, null, 2), "", "FOCUS AREAS TAXONOMY:", JSON.stringify(focusAreas, null, 2)].join("\n");
@@ -131,7 +144,7 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
     hqLocation: parsed?.hq_location ?? null,
     aumValue,
     aumDisplay: formatAum(aumValue, aumConfidence),
-    aumAsOf: parsed?.aum_as_of_date ?? null,
+    aumAsOf: parseAumAsOfDate(parsed?.aum_as_of_date),
     aumConfidence,
     aumSourceDescription: parsed?.aum_source_description ?? null,
     strategies: stratResult.valid,
