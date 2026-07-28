@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
   const similarToFirmId = searchParams.get("similarTo");
   const search = searchParams.get("q");
   const includeDeleted = searchParams.get("includeDeleted") === "true";
+  const projectId = searchParams.get("projectId");
 
   const scope = await firmScopeWhere(user);
 
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
   if (strategyParent) where.strategies = { path: [strategyParent], not: Prisma.JsonNull } as never;
   if (focusParent) where.focusAreas = { path: [focusParent], not: Prisma.JsonNull } as never;
   if (stage) where.crmStage = { stage: stage as never };
+  if (projectId) where.projectFirms = { some: { projectId } };
 
   const firms = await prisma.firm.findMany({
     where,
