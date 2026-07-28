@@ -681,3 +681,69 @@ lives here, not in the sidebar).
 throughout; `isomorphic-fetch` supports `@microsoft/microsoft-graph-client`. No CI
 workflows (`.github/`) and no Docker setup exist in this repo — deployment is Vercel-only,
 per `vercel.json` (§24).
+
+---
+
+# ⚠️ TARGET ARCHITECTURE — NOT YET BUILT
+
+**Everything above this line (§0–§24) describes the application exactly as it runs today.**
+Everything below describes where the product is headed — it is a design target, not
+current behavior. This distinction matters: earlier in this project's history, spec
+documents and actual code changes got confused with each other, and that confusion caused
+real problems (a schema rewrite was implemented and had to be reverted). Nothing below this
+banner has been implemented. It exists here so the target model lives alongside the
+current-state documentation instead of scattered across separate files.
+
+## 25. The "Project as base" model
+
+Today's navigation (§0–§24) treats Firms Database, CRM Pipeline, and Contacts as global,
+top-level sidebar destinations, with Projects as a secondary grouping layered on top of one
+shared firm pool (§11, §10). The target model inverts this:
+
+**Project becomes the primary container, not a filter.** Clicking a project's name opens a
+self-contained workspace — its own entity database, its own pipeline, its own contacts —
+rather than a filtered view into globally shared tables. Concretely:
+
+- **Navigation**: "Projects" becomes the main entry point in the sidebar. There is no
+  longer a standalone global "Firms Database" or "CRM Pipeline" nav item — those surfaces
+  exist *inside* each project, scoped to it. (Global cross-project views — search, reports
+  — may still exist, but they roll up from project-scoped data rather than being the
+  primary way of navigating.)
+- **What's inside a project once you click in**: an entity database (the generic
+  replacement for Firms Database, §7), a pipeline (the generic replacement for CRM
+  Pipeline, §6), contacts belonging to those entities, tasks, messages — the same
+  functional surface area documented in §0–§24, just scoped to one project instead of
+  shared globally.
+- **Classification & taxonomy are project-owned, not global-with-an-override.** Today
+  (§10) a project can *optionally* override the one global taxonomy. In the target model,
+  the project's taxonomy is the taxonomy — generated from how the user describes the
+  project (the existing describe → generate → review → confirm flow, §10, is the direct
+  template/precedent for this) rather than falling back to a shared default.
+- **Search/discovery criteria are project-defined.** Populate's fixed AUM-band/
+  strategy/geography criteria (§7) become criteria drawn from whatever fields *this
+  project's* entity schema actually has — a project searching for people has no AUM
+  criterion to search by at all; a project searching for firms might define totally
+  different fields than another firms-tracking project.
+- **The entity schema and pipeline stages are themselves project-defined**, not fixed to
+  Firm's AUM/domain/strategy columns (§7) or the fixed 13-stage CrmStage enum (§6) — see
+  the fuller data-model design in `docs/build-spec-v2-dynamic-platform.md` (dynamic
+  EntityType/FieldDefinition/PipelineStage) and the automation-preservation approach
+  (auto-tasks, auto-checklists, terminal stages, branching) captured in the approved
+  implementation plan.
+
+## 26. What this means for the code documented in §0–§24
+
+Nearly everything below the data model in §0–§24 carries forward largely as-is, scoped
+differently: the AI research engine (§2) becomes prompt-generated from a project's field
+definitions instead of hardcoded to Firm's columns; the Next Step/automation engine (§6)
+becomes data-driven per project instead of a hardcoded switch; Messages, Meetings,
+Notifications, Tasks, auth, and the design system (§12, §13, §15, §23) are already
+reasonably generic and mostly just get repointed at project-scoped entities instead of a
+global firm pool. The concentrated rework is: the entity schema itself, the pipeline stage
+list itself, and the two biggest UI surfaces (entity table/drawer, pipeline kanban) — this
+mirrors the "skeleton vs. dynamic" split already captured in
+`docs/architecture-skeleton-vs-dynamic.md`.
+
+**This section will need to move above the banner (become current-state documentation)
+once the target model is actually implemented — at that point, §0–§24 should be revised
+to match, not left describing a superseded version of the app.**
