@@ -1,6 +1,7 @@
 import { runWebResearch, extractJson } from "@/lib/anthropic";
 import { formatAum } from "@/lib/utils";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY, validateTaxonomySelection } from "@/lib/taxonomy";
+import { validateTaxonomySelection } from "@/lib/taxonomy";
+import { getBothTaxonomies } from "./taxonomy-store";
 import { rankByCapitalMarketsPriority } from "./contact-ranking";
 
 // Cost lever: domain resolution, AUM research, classification, AND contact
@@ -39,10 +40,10 @@ Respond with strict JSON only, no prose, shaped exactly as:
 }
 If you cannot confidently classify anything, use {} for strategies/focus_areas rather than guessing. If you cannot confidently find a contact, use [] rather than guessing.`;
 
-function buildTaxonomyReference(): string {
-  return ["STRATEGIES TAXONOMY:", JSON.stringify(STRATEGIES_TAXONOMY, null, 2), "", "FOCUS AREAS TAXONOMY:", JSON.stringify(FOCUS_AREAS_TAXONOMY, null, 2)].join(
-    "\n"
-  );
+async function buildTaxonomyReference(): Promise<{ text: string; strategies: Record<string, string[]>; focusAreas: Record<string, string[]> }> {
+  const { strategies, focusAreas } = await getBothTaxonomies();
+  const text = ["STRATEGIES TAXONOMY:", JSON.stringify(strategies, null, 2), "", "FOCUS AREAS TAXONOMY:", JSON.stringify(focusAreas, null, 2)].join("\n");
+  return { text, strategies, focusAreas };
 }
 
 export interface CoreResearchContact {
@@ -70,9 +71,11 @@ export interface FirmCoreResearchResult {
 }
 
 export async function researchFirmCore(params: { firmName: string }): Promise<FirmCoreResearchResult> {
+  const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
+
   const raw = await runWebResearch({
     system: CORE_RESEARCH_SYSTEM_PROMPT,
-    cacheableSystemExtra: buildTaxonomyReference(),
+    cacheableSystemExtra: taxonomyReference,
     user: `Research and classify this investment manager: ${params.firmName}`,
     maxTokens: 3072,
     maxUses: 7,
@@ -98,8 +101,8 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
   const aumValue = typeof parsed?.aum_value_usd === "number" ? parsed.aum_value_usd : null;
   const aumConfidence = parsed?.aum_confidence === "confirmed" || parsed?.aum_confidence === "dated" ? parsed.aum_confidence : "unconfirmed";
 
-  const stratResult = validateTaxonomySelection(parsed?.strategies, STRATEGIES_TAXONOMY);
-  const focusResult = validateTaxonomySelection(parsed?.focus_areas, FOCUS_AREAS_TAXONOMY);
+  const stratResult = validateTaxonomySelection(parsed?.strategies, strategiesTaxonomy);
+  const focusResult = validateTaxonomySelection(parsed?.focus_areas, focusAreasTaxonomy);
   const hasAnyClassification = Object.keys(stratResult.valid).length > 0 || Object.keys(focusResult.valid).length > 0;
 
   // Contacts are only trustworthy if a real domain was resolved — discard

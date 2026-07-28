@@ -6,7 +6,7 @@ import { Input, Select } from "@/components/ui/input";
 import { Pill, TagPill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, X, Sparkles, Bell, Building2, FolderKanban, Tags } from "lucide-react";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
 import { AddFirmModal } from "./_components/add-firm-modal";
 import { PopulateModal } from "./_components/populate-modal";
@@ -21,6 +21,7 @@ import type { FirmListItem } from "@/lib/types";
 import { useSearchParams } from "next/navigation";
 
 export default function FirmsPage() {
+  const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
   const [firms, setFirms] = useState<FirmListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");

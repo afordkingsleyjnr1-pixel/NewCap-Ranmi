@@ -1,7 +1,10 @@
-// Fixed Strategies & Focus Areas taxonomy — Section 5.4.
-// Single source of truth: the Classification Engine, the filter accordions,
-// the Populate criteria picker, and server-side validation all read from here.
-// Never let an LLM response bypass this list.
+// Strategies & Focus Areas taxonomy defaults — Section 5.4.
+// These are seed data only: the live, editable taxonomy lives in the
+// TaxonomySet DB table (see lib/services/taxonomy-store.ts) and is what the
+// Classification Engine, filter accordions, Populate criteria picker, and
+// server-side validation actually read at runtime. These constants exist so
+// the DB has something to seed from on first read, and as the fallback
+// shape reference. Never let an LLM response bypass the taxonomy.
 
 export const STRATEGIES_TAXONOMY: Record<string, string[]> = {
   "Real Estate Equity": [

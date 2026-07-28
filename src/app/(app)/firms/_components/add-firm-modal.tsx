@@ -9,7 +9,7 @@ import { StepProgress } from "@/components/ui/step-progress";
 import { AumInput } from "@/components/ui/aum-input";
 import { Loader2 } from "lucide-react";
 import { TaxonomyPicker } from "./taxonomy-picker";
-import { STRATEGIES_TAXONOMY, FOCUS_AREAS_TAXONOMY } from "@/lib/taxonomy";
+import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 import { readNdjsonStream } from "@/lib/ndjson-client";
 import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
 
@@ -33,6 +33,7 @@ interface CriteriaResult {
 type Mode = "by_name" | "by_criteria";
 
 export function AddFirmModal({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
+  const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
   const [mode, setMode] = useState<Mode>("by_name");
 
   // By Name
