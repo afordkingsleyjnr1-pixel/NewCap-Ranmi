@@ -42,17 +42,52 @@ Respond with strict JSON only, no prose, shaped exactly as:
 }
 If you cannot confidently classify anything, use {} for strategies/focus_areas rather than guessing. If you cannot confidently find a contact, use [] rather than guessing.`;
 
-// The prompt asks for strict YYYY-MM-DD, but the model doesn't always
-// comply (e.g. "Q1 2025", "recent") — `new Date(...)` on those inputs
-// doesn't throw, it silently produces an Invalid Date, which then fails
-// at the Prisma write with an opaque error. Validate here so a malformed
-// date is treated the same as "not found" (null) instead of surfacing as
-// a hard failure that aborts the whole firm add.
+// The prompt asks for strict YYYY-MM-DD, but sources (and the model) often
+// only give a coarser date — "Q1 2025", "March 2024", just "2024" — and an
+// unparseable string like "recent" must never reach `new Date(...)`, since
+// that doesn't throw, it silently produces an Invalid Date that only fails
+// once Prisma tries to write it, aborting the whole firm add. Rather than
+// discarding every non-exact format down to null, normalize the common
+// coarser shapes to a real calendar date (first day of the
+// quarter/month/year) so a genuine "as of Q1 2025" from a source still
+// gets recorded — only truly unparseable text becomes null.
 function parseAumAsOfDate(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
-  return Number.isNaN(new Date(trimmed).getTime()) ? null : trimmed;
+  if (!trimmed) return null;
+
+  const isoDate = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDate) return isValidDate(trimmed) ? trimmed : null;
+
+  const yearMonth = trimmed.match(/^(\d{4})-(\d{2})$/);
+  if (yearMonth) return normalize(`${yearMonth[1]}-${yearMonth[2]}-01`);
+
+  const yearOnly = trimmed.match(/^(\d{4})$/);
+  if (yearOnly) return normalize(`${yearOnly[1]}-01-01`);
+
+  const quarter = trimmed.match(/^Q([1-4])[\s,]+(\d{4})$/i) ?? trimmed.match(/^(\d{4})[\s,]+Q([1-4])$/i);
+  if (quarter) {
+    const [year, q] = /^Q/i.test(trimmed) ? [quarter[2], quarter[1]] : [quarter[1], quarter[2]];
+    const month = String((Number(q) - 1) * 3 + 1).padStart(2, "0");
+    return normalize(`${year}-${month}-01`);
+  }
+
+  // Free text like "March 2024" or "31 December 2023" — trust JS's date
+  // parser but always verify the result before returning it.
+  const parsed = new Date(trimmed);
+  return isValidDateObject(parsed) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+function isValidDate(isoDateString: string): boolean {
+  return isValidDateObject(new Date(isoDateString));
+}
+
+function isValidDateObject(d: Date): boolean {
+  return !Number.isNaN(d.getTime());
+}
+
+function normalize(isoDateString: string): string | null {
+  return isValidDate(isoDateString) ? isoDateString : null;
 }
 
 async function buildTaxonomyReference(): Promise<{ text: string; strategies: Record<string, string[]>; focusAreas: Record<string, string[]> }> {
