@@ -461,3 +461,34 @@ added twice under slightly different research runs.
     a free-form message never drives the pipeline. Supports `replyToThreadId` to send
     within an existing thread's actual provider thread (lands as a real Gmail/Outlook
     reply), same mechanism CRM follow-ups use.
+
+## 20. Fourth pass — the authorization mechanism itself, and an automatic stage transition
+
+- **`firmScopeWhere`/`projectScopeWhere` (`src/lib/authz.ts`) is the exact mechanism**
+  behind every "respects role-based visibility" claim made throughout this doc — worth
+  spelling out since it was only ever referenced, never explained:
+  - `dataScope: "all_firms"` roles → no filter at all, see everything.
+  - `dataScope: "owned_firms_only"` roles → firms filtered to
+    `{ crmStage: { ownerId: user.id } }` — note this scopes by **who owns the firm's CRM
+    stage row**, not by who created/added the firm.
+  - Projects use a parallel but distinct rule: `all_firms` roles see every project;
+    everyone else sees only projects they own **or are a member of**
+    (`OR: [{ ownerId }, { members: { some: { userId } } }]`) — membership-based, not
+    stage-ownership-based, since a project has no single CRM stage to key off of.
+  - `requirePermission()`/`ForbiddenError` is the separate, permission-based (not
+    data-scope-based) gate used throughout the API routes referenced across this doc
+    (`manage_settings`, `export_data`, etc.) — the two systems (what you can see vs. what
+    you're allowed to do) are independent and both apply.
+- **Inbound replies can automatically change a firm's CRM stage** — a real, separate
+  trigger from the manual kanban drag (§6) and the "Log outcome" respond action that §6
+  never mentioned: `reply-handling.ts`'s `handleInboundReply()` (called from both the
+  Gmail and Outlook webhook handlers, §14) auto-advances a firm from any stage except
+  `do_not_contact`/`responded` itself to **`responded`** the moment a genuine reply lands —
+  logged as its own `ActivityLog` stage_change entry ("Reply received — stage automatically
+  changed to Responded"). This only applies to CRM-tracked threads
+  (`EmailThread.isFreeForm: false`) — a reply to a free-form Messages thread never touches
+  the pipeline, consistent with §19's send-pipeline split.
+- Related: **`ingestNewInboundThread()`** handles the edge case of a contact emailing the
+  connected mailbox directly (not as a reply to anything the platform sent) — creates the
+  thread from scratch, then routes through the same notification path as an ordinary
+  reply.
