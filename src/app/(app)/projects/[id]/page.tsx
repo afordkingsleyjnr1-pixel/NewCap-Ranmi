@@ -8,8 +8,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar } from "@/components/ui/avatar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { STAGE_LABELS, STAGE_COLORS, type CrmStageKey } from "@/lib/crm-stages";
-import { formatDate, formatDateTime } from "@/lib/utils";
-import { ArrowLeft, Plus, Trash2, Mail, Loader2 } from "lucide-react";
+import { formatDate, formatDateTime, cn } from "@/lib/utils";
+import { ArrowLeft, Plus, Trash2, Mail, Loader2, ChevronDown } from "lucide-react";
 import { NextStepCell } from "../../crm/_components/next-step-cell";
 import { useNextStepActions } from "../../crm/_components/use-next-step-actions";
 import { AddFirmsModal } from "./_components/add-firms-modal";
@@ -93,6 +93,8 @@ export default function ProjectDetailPage() {
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [canManageSettings, setCanManageSettings] = useState(false);
   const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -213,51 +215,105 @@ export default function ProjectDetailPage() {
         ))}
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="firms">Firms ({project.firms.length})</TabsTrigger>
           <TabsTrigger value="tasks">Tasks ({openTasks.length})</TabsTrigger>
           <TabsTrigger value="actions">Actions</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="taxonomy">Taxonomy</TabsTrigger>
-          <TabsTrigger value="members">Members ({project.members.length})</TabsTrigger>
+          <div className="relative">
+            <button
+              onClick={() => setMoreMenuOpen((o) => !o)}
+              className={cn(
+                "flex items-center gap-1 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-text-secondary hover:text-text-primary",
+                ["firms", "taxonomy", "members"].includes(activeTab) && "border-primary text-primary"
+              )}
+            >
+              {activeTab === "firms"
+                ? `Firms (${project.firms.length})`
+                : activeTab === "taxonomy"
+                  ? "Taxonomy"
+                  : activeTab === "members"
+                    ? `Members (${project.members.length})`
+                    : "More"}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+            {moreMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMoreMenuOpen(false)} />
+                <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-md border border-border bg-surface p-1 shadow-lg">
+                  <button
+                    onClick={() => {
+                      setActiveTab("firms");
+                      setMoreMenuOpen(false);
+                    }}
+                    className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm text-text-primary hover:bg-page"
+                  >
+                    Firms ({project.firms.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab("taxonomy");
+                      setMoreMenuOpen(false);
+                    }}
+                    className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm text-text-primary hover:bg-page"
+                  >
+                    Taxonomy
+                  </button>
+                  <button
+                    onClick={() => {
+                      setActiveTab("members");
+                      setMoreMenuOpen(false);
+                    }}
+                    className="flex w-full items-center rounded px-2.5 py-1.5 text-left text-sm text-text-primary hover:bg-page"
+                  >
+                    Members ({project.members.length})
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="space-y-4 pt-4">
-            <div>
-              <h3 className="mb-2 text-sm font-semibold text-text-primary">Upcoming Deadlines</h3>
-              {upcomingDeadlines.length === 0 && <p className="text-xs text-text-secondary">No upcoming task deadlines.</p>}
-              <div className="space-y-1.5">
-                {upcomingDeadlines.slice(0, 5).map((t) => {
-                  const overdue = t.dueDate && new Date(t.dueDate) < now;
-                  return (
-                    <div key={t.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
-                      <span className="text-text-primary">
-                        {t.title} <span className="text-text-secondary">— {t.firm.name}</span>
-                      </span>
-                      {overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : <span className="text-xs text-text-secondary">{formatDate(t.dueDate)}</span>}
+          <div className="grid grid-cols-1 gap-4 pt-4 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-4">
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-text-primary">Upcoming Deadlines</h3>
+                {upcomingDeadlines.length === 0 && <p className="text-xs text-text-secondary">No upcoming task deadlines.</p>}
+                <div className="space-y-1.5">
+                  {upcomingDeadlines.slice(0, 5).map((t) => {
+                    const overdue = t.dueDate && new Date(t.dueDate) < now;
+                    return (
+                      <div key={t.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm">
+                        <span className="text-text-primary">
+                          {t.title} <span className="text-text-secondary">— {t.firm.name}</span>
+                        </span>
+                        {overdue ? <Pill color="red">{formatDate(t.dueDate)} overdue</Pill> : <span className="text-xs text-text-secondary">{formatDate(t.dueDate)}</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <h3 className="mb-2 text-sm font-semibold text-text-primary">Recent Activity</h3>
+                {activity.length === 0 && <p className="text-xs text-text-secondary">No activity yet.</p>}
+                <div className="space-y-2">
+                  {activity.map((a) => (
+                    <div key={a.id} className="border-b border-border py-2 text-sm last:border-0">
+                      <p className="text-text-primary">
+                        {a.body} <span className="text-text-secondary">— {a.firm.name}</span>
+                      </p>
+                      <p className="text-xs text-text-secondary">
+                        {formatDateTime(a.createdAt)} {a.createdBy ? `· ${a.createdBy.name}` : ""}
+                      </p>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-text-primary">Recent Activity</h3>
-              {activity.length === 0 && <p className="text-xs text-text-secondary">No activity yet.</p>}
-              <div className="space-y-2">
-                {activity.map((a) => (
-                  <div key={a.id} className="border-b border-border py-2 text-sm last:border-0">
-                    <p className="text-text-primary">
-                      {a.body} <span className="text-text-secondary">— {a.firm.name}</span>
-                    </p>
-                    <p className="text-xs text-text-secondary">
-                      {formatDateTime(a.createdAt)} {a.createdBy ? `· ${a.createdBy.name}` : ""}
-                    </p>
-                  </div>
-                ))}
-              </div>
+              <h3 className="mb-2 text-sm font-semibold text-text-primary">Messages</h3>
+              <ProjectMessagesTab projectId={project.id} compact limit={6} />
             </div>
           </div>
         </TabsContent>
@@ -435,10 +491,6 @@ export default function ProjectDetailPage() {
             handleAction={handleAction}
             onDone={load}
           />
-        </TabsContent>
-
-        <TabsContent value="messages">
-          <ProjectMessagesTab projectId={project.id} />
         </TabsContent>
 
         <TabsContent value="taxonomy">
