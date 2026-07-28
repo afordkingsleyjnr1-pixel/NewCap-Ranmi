@@ -540,6 +540,14 @@ model Project {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
+  /// AI-generated, project-specific classification structure — same shape
+  /// as the global STRATEGIES_TAXONOMY ({ "Parent": ["Child", ...] }), but
+  /// scoped to this project only and never touching the global taxonomy.
+  /// Null until the user has generated + confirmed one.
+  taxonomy            Json?     @map("taxonomy")
+  taxonomyDescription String?   @map("taxonomy_description") @db.Text
+  taxonomyConfirmedAt DateTime? @map("taxonomy_confirmed_at")
+
   members ProjectMember[]
   firms   ProjectFirm[]
   tasks   Task[]

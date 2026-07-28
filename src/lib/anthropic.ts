@@ -99,6 +99,38 @@ export async function runWebResearch(params: {
   throw lastError;
 }
 
+/**
+ * Plain completion, no web_search tool — for prompts that only need the
+ * model's own reasoning (e.g. generating a taxonomy structure from a
+ * natural-language brief), where a search call would just be unbilled-for
+ * cost with no benefit.
+ */
+export async function runCompletion(params: { system: string; user: string; maxTokens?: number }): Promise<string> {
+  const anthropic = getAnthropicClient();
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await sleep(1500);
+    try {
+      const response = await anthropic.messages.create({
+        model: RESEARCH_MODEL,
+        max_tokens: params.maxTokens ?? 2048,
+        system: params.system,
+        messages: [{ role: "user", content: params.user }],
+      });
+      return response.content
+        .filter((block): block is Anthropic.Messages.TextBlock => block.type === "text")
+        .map((block) => block.text)
+        .join("\n")
+        .trim();
+    } catch (e) {
+      lastError = e;
+      const status = e && typeof e === "object" && "status" in e ? (e as { status: unknown }).status : undefined;
+      if (!isRetryableStatus(status)) throw e;
+    }
+  }
+  throw lastError;
+}
+
 /** Extracts the first {...} JSON object from a possibly prose-wrapped LLM response. */
 export function extractJson<T = unknown>(text: string): T | null {
   const match = text.match(/\{[\s\S]*\}/);
