@@ -23,6 +23,15 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : "Unknown error";
 }
 
+// Defense in depth alongside the validation in firm-core-research.ts — an
+// invalid Date passed to Prisma throws and aborts the whole firm.create()
+// call, so this must never construct one from an unvalidated string.
+function safeDate(value: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * The single shared research pipeline behind Add Firm (5.1) and every candidate
  * Populate surfaces (5.10): one combined domain+AUM+classification+contacts
@@ -126,7 +135,7 @@ export async function runFirmResearchPipeline(params: {
       hqLocation: core.hqLocation,
       aumValue: core.aumValue,
       aumDisplay: core.aumDisplay,
-      aumAsOf: core.aumAsOf ? new Date(core.aumAsOf) : null,
+      aumAsOf: safeDate(core.aumAsOf),
       aumConfidence: core.aumConfidence,
       withinMandate,
       strategies: core.strategies,
