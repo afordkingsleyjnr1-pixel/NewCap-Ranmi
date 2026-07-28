@@ -11,39 +11,39 @@ import type { StageAction } from "@/lib/crm-stages";
 /**
  * Centralizes the five Next Step action modals (Send Email/Follow-Up/Term
  * Sheet, Schedule Meeting, Review Reply, Meeting Outcome, Close Deal) so
- * every page that shows a Next Step button (Firms Database, CRM Pipeline,
+ * every page that shows a Next Step button (Entities Database, CRM Pipeline,
  * Contacts) drives them through one handleAction call instead of each
  * re-implementing its own modal wiring.
  */
 export function useNextStepActions(onChanged: () => void) {
-  const [compose, setCompose] = useState<{ firmId: string; firmName: string; kind: ComposeKind } | null>(null);
-  const [scheduleMeeting, setScheduleMeeting] = useState<{ firmId: string; firmName: string } | null>(null);
-  const [reviewReply, setReviewReply] = useState<{ firmId: string; firmName: string } | null>(null);
+  const [compose, setCompose] = useState<{ entityId: string; firmName: string; kind: ComposeKind } | null>(null);
+  const [scheduleMeeting, setScheduleMeeting] = useState<{ entityId: string; firmName: string } | null>(null);
+  const [reviewReply, setReviewReply] = useState<{ entityId: string; firmName: string } | null>(null);
   const [meetingOutcome, setMeetingOutcome] = useState<{ meetingId: string; firmName: string } | null>(null);
-  const [closeDeal, setCloseDeal] = useState<{ firmId: string; firmName: string } | null>(null);
+  const [closeDeal, setCloseDeal] = useState<{ entityId: string; firmName: string } | null>(null);
 
-  function handleAction(firmId: string, action: NonNullable<StageAction>, meetingId?: string, firmName = "") {
+  function handleAction(entityId: string, action: NonNullable<StageAction>, meetingId?: string, firmName = "") {
     switch (action) {
       case "send_email":
-        setCompose({ firmId, firmName, kind: "email" });
+        setCompose({ entityId, firmName, kind: "email" });
         break;
       case "send_follow_up":
-        setCompose({ firmId, firmName, kind: "follow_up" });
+        setCompose({ entityId, firmName, kind: "follow_up" });
         break;
       case "send_term_sheet":
-        setCompose({ firmId, firmName, kind: "term_sheet" });
+        setCompose({ entityId, firmName, kind: "term_sheet" });
         break;
       case "schedule_meeting":
-        setScheduleMeeting({ firmId, firmName });
+        setScheduleMeeting({ entityId, firmName });
         break;
       case "review_reply":
-        setReviewReply({ firmId, firmName });
+        setReviewReply({ entityId, firmName });
         break;
       case "meeting_outcome":
         if (meetingId) setMeetingOutcome({ meetingId, firmName });
         break;
       case "close_deal":
-        setCloseDeal({ firmId, firmName });
+        setCloseDeal({ entityId, firmName });
         break;
     }
   }
@@ -53,7 +53,7 @@ export function useNextStepActions(onChanged: () => void) {
       <ComposeEmailModal
         open={!!compose}
         onOpenChange={(o) => !o && setCompose(null)}
-        firmId={compose?.firmId ?? null}
+        entityId={compose?.entityId ?? null}
         firmName={compose?.firmName}
         kind={compose?.kind}
         onSent={onChanged}
@@ -61,14 +61,14 @@ export function useNextStepActions(onChanged: () => void) {
       <ScheduleMeetingModal
         open={!!scheduleMeeting}
         onOpenChange={(o) => !o && setScheduleMeeting(null)}
-        firmId={scheduleMeeting?.firmId ?? null}
+        entityId={scheduleMeeting?.entityId ?? null}
         firmName={scheduleMeeting?.firmName}
         onScheduled={onChanged}
       />
       <ReviewReplyModal
         open={!!reviewReply}
         onOpenChange={(o) => !o && setReviewReply(null)}
-        firmId={reviewReply?.firmId ?? null}
+        entityId={reviewReply?.entityId ?? null}
         firmName={reviewReply?.firmName}
         onDone={onChanged}
       />
@@ -82,7 +82,7 @@ export function useNextStepActions(onChanged: () => void) {
       <CloseDealModal
         open={!!closeDeal}
         onOpenChange={(o) => !o && setCloseDeal(null)}
-        firmId={closeDeal?.firmId ?? null}
+        entityId={closeDeal?.entityId ?? null}
         firmName={closeDeal?.firmName}
         onDone={onChanged}
       />

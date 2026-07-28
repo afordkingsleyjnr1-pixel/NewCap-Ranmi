@@ -20,7 +20,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   try {
     const result = await sendFreeFormMessage({
       userId: user!.id,
-      firmId: draft.firmId,
+      entityId: draft.entityId,
       contactId: draft.contactId,
       toName: draft.toName ?? undefined,
       toEmail: draft.toEmail ?? undefined,

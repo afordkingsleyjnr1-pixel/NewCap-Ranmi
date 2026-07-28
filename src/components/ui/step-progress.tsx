@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Horizontal row of ticks for a multi-step background process (Add Firm /
+ * Horizontal row of ticks for a multi-step background process (Add Entity /
  * Populate research). Each step turns green with a checkmark once passed;
  * the current step pulses; the connecting line fills in behind it.
  */

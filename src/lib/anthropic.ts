@@ -10,7 +10,7 @@ export function getAnthropicClient(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set. Add it to .env to enable the Classification Engine, " +
-        "firm research, and Populate. See Settings for status."
+        "entity research, and Populate. See Settings for status."
     );
   }
   if (!client) client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -32,7 +32,7 @@ export const RESEARCH_MODEL = "claude-haiku-4-5-20251001";
  * `maxUses` caps how many searches a single call can run — each search is
  * billed at $10/1,000 separately from token usage. `maxFetches`, when set,
  * adds the web_fetch tool (no per-call fee, just standard token cost for
- * the fetched page) so the model can search once to find the firm's
+ * the fetched page) so the model can search once to find the entity's
  * domain/page URLs, then fetch those pages directly for full content
  * instead of doing more searches to piece together partial snippets —
  * fewer total tool-use turns, and each turn's resent-history cost is what

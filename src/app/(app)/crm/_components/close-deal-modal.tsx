@@ -11,13 +11,13 @@ import { Loader2 } from "lucide-react";
 export function CloseDealModal({
   open,
   onOpenChange,
-  firmId,
+  entityId,
   firmName,
   onDone,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firmId: string | null;
+  entityId: string | null;
   firmName?: string;
   onDone: () => void;
 }) {
@@ -26,9 +26,9 @@ export function CloseDealModal({
   const [loading, setLoading] = useState(false);
 
   async function submit() {
-    if (!firmId || !outcome) return;
+    if (!entityId || !outcome) return;
     setLoading(true);
-    await fetch(`/api/crm/${firmId}/stage`, { method: "PATCH", body: JSON.stringify({ stage: outcome, dealNotes: dealNotes || undefined }) });
+    await fetch(`/api/crm/${entityId}/stage`, { method: "PATCH", body: JSON.stringify({ stage: outcome, dealNotes: dealNotes || undefined }) });
     setLoading(false);
     setOutcome(null);
     setDealNotes("");

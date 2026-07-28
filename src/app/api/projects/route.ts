@@ -13,7 +13,7 @@ export async function GET() {
     include: {
       owner: { select: { id: true, name: true } },
       members: { include: { user: { select: { id: true, name: true, email: true } } } },
-      firms: { select: { firmId: true } },
+      entities: { select: { entityId: true } },
       tasks: { select: { id: true, status: true, dueDate: true } },
     },
     orderBy: { createdAt: "desc" },

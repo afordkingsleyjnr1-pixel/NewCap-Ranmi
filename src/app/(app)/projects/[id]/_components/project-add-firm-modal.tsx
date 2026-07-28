@@ -8,7 +8,7 @@ import { Pill } from "@/components/ui/badge";
 import { StepProgress } from "@/components/ui/step-progress";
 import { AumInput } from "@/components/ui/aum-input";
 import { Loader2 } from "lucide-react";
-import { TaxonomyPicker } from "../../../firms/_components/taxonomy-picker";
+import { TaxonomyPicker } from "../../../entities/_components/taxonomy-picker";
 import { readNdjsonStream } from "@/lib/ndjson-client";
 import { ADD_FIRM_STEPS, parseAddFirmProgress } from "@/lib/progress-parse";
 
@@ -22,20 +22,20 @@ interface AddFirmSummary {
 }
 
 interface CriteriaResult {
-  firmsFound: number;
-  firmsAdded: number;
-  firmsSkippedDuplicate: number;
+  entitiesFound: number;
+  entitiesAdded: number;
+  entitiesSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
   researchWarnings?: string[];
 }
 
 type Mode = "by_name" | "by_criteria";
 
-// Same two-mode flow as the main Firms Database "Add Firm" modal, but "By
+// Same two-mode flow as the main Entities Database "Add Entity" modal, but "By
 // Criteria" searches against this project's own taxonomy (Settings →
 // Taxonomy tab's saved structure) instead of the platform-wide Strategies/
-// Focus Areas taxonomy — and every firm this adds is attached to the
-// project automatically, same as the main Add Firms flow.
+// Focus Areas taxonomy — and every entity this adds is attached to the
+// project automatically, same as the main Add Entities flow.
 export function ProjectAddFirmModal({
   open,
   onOpenChange,
@@ -73,16 +73,16 @@ export function ProjectAddFirmModal({
   function handleProgressEvent(event: { type: string; [k: string]: unknown }) {
     if (typeof event.message !== "string") return;
     setProgressFirm((prevFirm) => {
-      const { firm, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
-      if (firm !== prevFirm && prevFirm !== null) setFirmsDone((n) => n + 1);
-      setProgressStep((prevStep) => (firm !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
-      return firm;
+      const { entity, stepIndex } = parseAddFirmProgress(event.message as string, prevFirm);
+      if (entity !== prevFirm && prevFirm !== null) setFirmsDone((n) => n + 1);
+      setProgressStep((prevStep) => (entity !== prevFirm ? stepIndex : Math.max(prevStep, stepIndex)));
+      return entity;
     });
   }
 
   async function attachToProject(firmIds: string[]) {
     if (firmIds.length === 0) return;
-    await fetch(`/api/projects/${projectId}/firms`, { method: "POST", body: JSON.stringify({ firmIds }) });
+    await fetch(`/api/projects/${projectId}/entities`, { method: "POST", body: JSON.stringify({ firmIds }) });
   }
 
   async function submitByName() {
@@ -92,10 +92,10 @@ export function ProjectAddFirmModal({
     setProgressStep(0);
     setFirmsDone(0);
     try {
-      const res = await fetch("/api/firms", { method: "POST", body: JSON.stringify({ names }) });
+      const res = await fetch("/api/entities", { method: "POST", body: JSON.stringify({ names }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to add firms");
+        throw new Error(data.error ?? "Failed to add entities");
       }
       const data = await readNdjsonStream<AddFirmSummary>(res, handleProgressEvent);
       await attachToProject([...data.added, ...data.needsDomainConfirmation].map((f) => f.id));
@@ -167,10 +167,10 @@ export function ProjectAddFirmModal({
     <Modal
       open={open}
       onOpenChange={close}
-      title="Add Firm to Project"
+      title="Add Entity to Project"
       description={
         mode === "by_name"
-          ? "Type one or more firm names — the platform researches everything else and adds them straight to this project."
+          ? "Type one or more entity names — the platform researches everything else and adds them straight to this project."
           : "Describe the kind of manager you're looking for using this project's own taxonomy — matches are added straight to this project."
       }
       widthClassName="max-w-xl"
@@ -201,7 +201,7 @@ export function ProjectAddFirmModal({
                 onChange={(e) => setNames(e.target.value)}
               />
               <p className="text-xs text-text-secondary">
-                One name per line, or comma-separated for a batch. Researched the same way as the main Add Firm flow, then attached to this project.
+                One name per line, or comma-separated for a batch. Researched the same way as the main Add Entity flow, then attached to this project.
               </p>
             </>
           ) : !hasTaxonomy ? (
@@ -230,9 +230,9 @@ export function ProjectAddFirmModal({
                 </div>
               </div>
               <div>
-                <Label>Number of firms to add</Label>
+                <Label>Number of entities to add</Label>
                 <Input type="number" min={1} max={50} value={targetCount} onChange={(e) => setTargetCount(e.target.value)} className="w-24" />
-                <p className="mt-1 text-xs text-text-secondary">How many new firms to search for and add in this run (1–50).</p>
+                <p className="mt-1 text-xs text-text-secondary">How many new entities to search for and add in this run (1–50).</p>
               </div>
             </div>
           )}
@@ -242,7 +242,7 @@ export function ProjectAddFirmModal({
               <p className="mb-1 text-center text-xs font-medium text-text-primary">
                 {progressFirm ? (
                   <>
-                    {mode === "by_name" && namesCount > 1 ? `Firm ${Math.min(firmsDone + 1, namesCount)} of ${namesCount}: ` : ""}
+                    {mode === "by_name" && namesCount > 1 ? `Entity ${Math.min(firmsDone + 1, namesCount)} of ${namesCount}: ` : ""}
                     {progressFirm}
                   </>
                 ) : (
@@ -326,9 +326,9 @@ export function ProjectAddFirmModal({
         criteriaResult && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Pill color="blue">{criteriaResult.firmsFound} candidates found</Pill>
-              <Pill color="green">{criteriaResult.firmsAdded} new firms added to this project</Pill>
-              <Pill color="gray">{criteriaResult.firmsSkippedDuplicate} skipped as duplicates</Pill>
+              <Pill color="blue">{criteriaResult.entitiesFound} candidates found</Pill>
+              <Pill color="green">{criteriaResult.entitiesAdded} new entities added to this project</Pill>
+              <Pill color="gray">{criteriaResult.entitiesSkippedDuplicate} skipped as duplicates</Pill>
             </div>
             {criteriaResult.addedFirms.length > 0 && (
               <ul className="max-h-48 overflow-y-auto text-sm text-text-primary">

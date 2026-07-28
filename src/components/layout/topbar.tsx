@@ -160,7 +160,7 @@ export function Topbar({ userName = "Sydney" }: { userName?: string }) {
             {notifications.map((n) => (
               <Link
                 key={n.id}
-                href={n.relatedFirmId ? `/firms?open=${n.relatedFirmId}` : "#"}
+                href={n.relatedFirmId ? `/entities?open=${n.relatedFirmId}` : "#"}
                 onClick={() => markRead(n.id)}
                 className={`block border-b border-border px-3 py-2.5 text-xs last:border-0 hover:bg-page ${!n.isRead ? "bg-status-blue-bg/40" : ""}`}
               >

@@ -5,8 +5,8 @@ import { sendFreeFormMessage } from "@/lib/services/free-form-send";
 
 // Messages section — free-form send. Deliberately bypasses the CRM outreach
 // pipeline (/api/outreach/send): no Do Not Contact gate, no forced stage
-// change, no pending-task completion. A firm/contact link is optional and,
-// if present, is for record-keeping only (shows on that firm's Activity tab).
+// change, no pending-task completion. A entity/contact link is optional and,
+// if present, is for record-keeping only (shows on that entity's Activity tab).
 //
 // Pass `replyToThreadId` to send within an existing thread (Reply/Reply-All
 // style send from the Messages UI) instead of starting a new one — reuses
@@ -22,8 +22,8 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { firmId, contactId, toName, toEmail, cc, bcc, subject, message, replyToThreadId, attachments } = body as {
-    firmId?: string | null;
+  const { entityId, contactId, toName, toEmail, cc, bcc, subject, message, replyToThreadId, attachments } = body as {
+    entityId?: string | null;
     contactId?: string | null;
     toName?: string;
     toEmail?: string;
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   try {
     const result = await sendFreeFormMessage({
       userId: user!.id,
-      firmId,
+      entityId,
       contactId,
       toName,
       toEmail,

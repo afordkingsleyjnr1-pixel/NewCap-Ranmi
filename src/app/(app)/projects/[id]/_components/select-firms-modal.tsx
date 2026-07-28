@@ -14,20 +14,20 @@ interface FirmOption {
   name: string;
 }
 
-// Firm picker for the Actions tab — kept as its own modal (search + select
+// Entity picker for the Actions tab — kept as its own modal (search + select
 // all + pages of 50) rather than an always-rendered inline list, so a
-// project with hundreds or thousands of firms doesn't turn the Actions tab
+// project with hundreds or thousands of entities doesn't turn the Actions tab
 // into a giant scrolling checklist by default.
 export function SelectFirmsModal({
   open,
   onOpenChange,
-  firms,
+  entities,
   initialSelected,
   onConfirm,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firms: FirmOption[];
+  entities: FirmOption[];
   initialSelected: Set<string>;
   onConfirm: (selected: Set<string>) => void;
 }) {
@@ -45,8 +45,8 @@ export function SelectFirmsModal({
   }, [open]);
 
   const filtered = useMemo(
-    () => firms.filter((f) => f.name.toLowerCase().includes(search.toLowerCase())),
-    [firms, search]
+    () => entities.filter((f) => f.name.toLowerCase().includes(search.toLowerCase())),
+    [entities, search]
   );
   useEffect(() => setPage(1), [search]);
 
@@ -74,11 +74,11 @@ export function SelectFirmsModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Select Firms" widthClassName="max-w-2xl">
+    <Modal open={open} onOpenChange={onOpenChange} title="Select Entities" widthClassName="max-w-2xl">
       <div className="space-y-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-          <Input placeholder="Search firms in this project…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 pl-9" />
+          <Input placeholder="Search entities in this project…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 pl-9" />
         </div>
 
         <div className="flex items-center justify-between text-xs text-text-secondary">
@@ -112,7 +112,7 @@ export function SelectFirmsModal({
         </div>
 
         <div className="max-h-[28rem] overflow-y-auto rounded-md border border-border">
-          {paged.length === 0 && <p className="p-4 text-sm text-text-secondary">No matching firms.</p>}
+          {paged.length === 0 && <p className="p-4 text-sm text-text-secondary">No matching entities.</p>}
           {paged.map((f) => (
             <label key={f.id} className="flex cursor-pointer items-center gap-3 border-b border-border px-4 py-2.5 text-sm last:border-0 hover:bg-page">
               <Checkbox checked={staged.has(f.id)} onCheckedChange={() => toggle(f.id)} />
@@ -122,7 +122,7 @@ export function SelectFirmsModal({
         </div>
 
         <div className="flex items-center justify-between border-t border-border pt-3">
-          <p className="text-xs text-text-secondary">{staged.size} firm(s) selected in total</p>
+          <p className="text-xs text-text-secondary">{staged.size} entity(s) selected in total</p>
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

@@ -8,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
 
-  const editable = ["firmId", "contactId", "replyToThreadId", "toName", "toEmail", "ccEmails", "bccEmails", "subject", "body", "attachments"];
+  const editable = ["entityId", "contactId", "replyToThreadId", "toName", "toEmail", "ccEmails", "bccEmails", "subject", "body", "attachments"];
   const data: Record<string, unknown> = {};
   for (const f of editable) if (f in body) data[f] = body[f];
 

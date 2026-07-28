@@ -1,5 +1,6 @@
-// NewCap-Ranmi — RE Manager Capital-Introduction BD & CRM Platform
-// Full data model per Section 4 of the build spec.
+// Ranmi — Base BD/CRM & Research Platform (generic, per-project entity/pipeline model)
+// Every project defines its own EntityType/FieldDefinition schema and its own
+// PipelineStage list — nothing here is hardcoded to any one industry.
 
 generator client {
   provider = "prisma-client-js"
@@ -14,24 +15,6 @@ datasource db {
 // ────────────────────────────────────────────────────────────────────────
 // Enums
 // ────────────────────────────────────────────────────────────────────────
-
-enum DomainResolutionStatus {
-  resolved
-  ambiguous
-  unresolved
-}
-
-enum AumConfidence {
-  confirmed
-  dated
-  unconfirmed
-}
-
-enum WithinMandate {
-  yes
-  no
-  unconfirmed
-}
 
 enum ClassificationStatus {
   unclassified
@@ -55,22 +38,6 @@ enum EmailStatus {
   verified
   inferred
   unknown
-}
-
-enum CrmStage {
-  not_contacted
-  email_sent
-  follow_up_due
-  follow_up_sent
-  no_response
-  responded
-  meeting_scheduled
-  in_discussion_diligence
-  term_sheet_sent
-  closed_won
-  closed_lost
-  nurture
-  do_not_contact
 }
 
 enum ActivityType {
@@ -127,7 +94,7 @@ enum TaskPriority {
   high
 }
 
-// Separate from TaskStatus (open/done), which drives the automated CRM
+// Separate from TaskStatus (open/done), which drives the automated pipeline
 // pending-action lifecycle (pipeline-tasks.ts) and must keep its exact
 // current semantics. TaskTrackerStatus is the user-facing progress state
 // for manual task tracking — set independently, but completed/reopened
@@ -142,14 +109,14 @@ enum TaskTrackerStatus {
 }
 
 enum PopulateMode {
-  similar_to_firm
+  similar_to_entity
   by_criteria
   database_wide
 }
 
 enum DataScope {
-  all_firms
-  owned_firms_only
+  all_entities
+  owned_entities_only
 }
 
 enum TaxonomyKind {
@@ -157,13 +124,10 @@ enum TaxonomyKind {
   focus_area
 }
 
-// The editable, DB-backed source of truth for the global Strategies/Focus
-// Areas taxonomy (Settings → Classification & Taxonomy). One row per kind;
-// data is the same { "Parent Group": ["Child", ...] } shape the AI prompts
-// and picker UIs already expect, so every call site just swaps its static
-// import for a fetch/service call instead of changing shape. Seeded from
-// the STRATEGIES_TAXONOMY/FOCUS_AREAS_TAXONOMY defaults in lib/taxonomy.ts
-// on first read if no row exists yet — see lib/services/taxonomy-store.ts.
+// The editable, DB-backed source of truth for the global default Strategies/
+// Focus Areas taxonomy (Settings → Classification & Taxonomy). One row per
+// kind. Projects normally define their own taxonomy (Project.taxonomy) —
+// this global set is only a fallback/seed template for new projects.
 model TaxonomySet {
   id        String       @id @default(uuid())
   kind      TaxonomyKind @unique
@@ -182,10 +146,27 @@ enum ProjectStatus {
 enum NotificationType {
   reply_received
   role_changed
-  firms_reassigned
+  entities_reassigned
   email_needs_reauth
   meeting_reminder
   follow_up_due
+}
+
+// The kind of value a project-defined field holds. Drives both the input
+// control rendered in the UI and how the AI research engine coerces/parses
+// a found value before writing it into Entity.data.
+enum FieldType {
+  text
+  long_text
+  number
+  currency
+  date
+  boolean
+  single_select
+  multi_select
+  url
+  email
+  taxonomy_tag
 }
 
 // ────────────────────────────────────────────────────────────────────────
@@ -196,7 +177,7 @@ model Role {
   id               String    @id @default(uuid())
   name             String
   permissions      Json      @default("[]") // array of permission keys, Section 5.13
-  dataScope        DataScope @default(all_firms) @map("data_scope")
+  dataScope        DataScope @default(all_entities) @map("data_scope")
   isSystemDefault  Boolean   @default(false) @map("is_system_default")
   createdAt        DateTime  @default(now()) @map("created_at")
 
@@ -222,18 +203,19 @@ model User {
   passwordResetToken     String?   @unique @map("password_reset_token")
   passwordResetExpiresAt DateTime? @map("password_reset_expires_at")
 
-  emailConnection   EmailConnection?
-  ownedCrmStages    CrmStageRow[]     @relation("StageOwner")
-  ownedTasks        Task[]            @relation("TaskOwner")
-  verifiedTasks     Task[]            @relation("TaskCompletionVerifiedBy")
-  taskComments      TaskComment[]     @relation("TaskCommentCreatedBy")
-  activityLogs      ActivityLog[]     @relation("ActivityCreatedBy")
-  notifications     Notification[]
-  populateRuns      PopulateRun[]
-  deletedFirms      Firm[]            @relation("FirmDeletedBy")
-  ownedProjects     Project[]         @relation("ProjectOwner")
+  emailConnection    EmailConnection?
+  ownedEntityStages  EntityStage[]     @relation("StageOwner")
+  ownedEntities      Entity[]          @relation("EntityOwner")
+  ownedTasks         Task[]            @relation("TaskOwner")
+  verifiedTasks      Task[]            @relation("TaskCompletionVerifiedBy")
+  taskComments       TaskComment[]     @relation("TaskCommentCreatedBy")
+  activityLogs       ActivityLog[]     @relation("ActivityCreatedBy")
+  notifications      Notification[]
+  populateRuns       PopulateRun[]
+  deletedEntities    Entity[]          @relation("EntityDeletedBy")
+  ownedProjects      Project[]         @relation("ProjectOwner")
   projectMemberships ProjectMember[]
-  messageDrafts     MessageDraft[]
+  messageDrafts      MessageDraft[]
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -242,72 +224,184 @@ model User {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Firms & Contacts
+// Projects — the schema boundary. Every project defines its own EntityType
+// (what the tracked thing is called and what fields it has), its own
+// PipelineStage list, and its own taxonomy. Nothing about "what a project
+// tracks" is hardcoded anywhere else in the platform.
 // ────────────────────────────────────────────────────────────────────────
 
-model Firm {
-  id                      String                  @id @default(uuid())
-  name                    String
-  domain                  String?
-  domainResolutionStatus  DomainResolutionStatus? @map("domain_resolution_status")
-  hqLocation              String?                 @map("hq_location")
-  targetMarkets           String[]                @default([]) @map("target_markets")
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?       @db.Text
+  type        String?
+  status      ProjectStatus @default(active)
+  startDate   DateTime      @map("start_date") @db.Date
+  dueDate     DateTime?     @map("due_date") @db.Date
+  ownerId     String        @map("owner_id")
+  owner       User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
-  aumValue      Decimal?      @map("aum_value") @db.Decimal(20, 2)
-  aumDisplay    String?       @map("aum_display")
-  aumAsOf       DateTime?     @map("aum_as_of") @db.Date
-  aumConfidence AumConfidence? @map("aum_confidence")
+  /// AI-generated, project-specific classification structure — shape
+  /// { "Parent": ["Child", ...] }. Null until generated + confirmed.
+  taxonomy            Json?     @map("taxonomy")
+  taxonomyDescription String?   @map("taxonomy_description") @db.Text
+  taxonomyConfirmedAt DateTime? @map("taxonomy_confirmed_at")
 
-  withinMandate       WithinMandate @default(unconfirmed) @map("within_mandate")
-  withinMandateManual Boolean       @default(false) @map("within_mandate_manual")
+  /// Free-text steer for the AI research engine (replaces the old hardcoded
+  /// "institutional investment manager" prompt prose) — e.g. "focus on
+  /// institutional-grade sources only" or "prioritize recent conference
+  /// speakers." Optional; research still works from field researchHints
+  /// alone if unset.
+  researchFocus String? @map("research_focus") @db.Text
 
-  strategies  Json @default("{}")
-  focusAreas  Json @default("{}") @map("focus_areas")
+  /// Priority keyword list used to re-rank discovered contacts (replaces
+  /// the old hardcoded "Capital Markets/Introductions/Formation" title
+  /// bias) — e.g. ["Head of Talent", "Recruiting"]. Empty = no re-ranking.
+  contactPriorityTitles String[] @default([]) @map("contact_priority_titles")
 
-  strategyDetail String? @map("strategy_detail") @db.Text
+  members            ProjectMember[]
+  tasks              Task[]
+  entityTypes        EntityType[]
+  entities           Entity[]
+  pipelineStages     PipelineStage[]
+  qualificationRules QualificationRule[]
 
-  classificationStatus ClassificationStatus @default(unclassified) @map("classification_status")
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id])
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  addedAt   DateTime @default(now()) @map("added_at")
+
+  @@unique([projectId, userId])
+  @@map("project_members")
+}
+
+// One or more per project (usually one) — defines what "the tracked thing"
+// is called (e.g. "Firm", "Candidate", "Speaker") and, via FieldDefinition,
+// exactly what fields it has. Nothing outside this model + FieldDefinition
+// determines an entity's shape.
+model EntityType {
+  id         String   @id @default(uuid())
+  projectId  String   @map("project_id")
+  project    Project  @relation(fields: [projectId], references: [id])
+  name       String   // singular display label, e.g. "Firm"
+  pluralName String   @map("plural_name") // e.g. "Firms"
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  fields   FieldDefinition[]
+  entities Entity[]
+
+  @@unique([projectId, name])
+  @@map("entity_types")
+}
+
+model FieldDefinition {
+  id           String     @id @default(uuid())
+  entityTypeId String     @map("entity_type_id")
+  entityType   EntityType @relation(fields: [entityTypeId], references: [id])
+  key          String     // stable key into Entity.data, e.g. "aum_value"
+  label        String     // display label, e.g. "AUM"
+  type         FieldType
+  options      Json?      // string[] of choices, for single_select/multi_select
+  required     Boolean    @default(false)
+
+  /// If true, the AI research engine will attempt to find/fill this field.
+  aiResearchable Boolean @default(false) @map("ai_researchable")
+  /// Natural-language hint fed to the research prompt for this field, e.g.
+  /// "the firm's assets under management, in USD."
+  researchHint   String? @map("research_hint") @db.Text
+
+  /// If true, this field's value contributes to the Populate/"Find Similar"
+  /// similarity score.
+  includeInSimilarity Boolean @default(false) @map("include_in_similarity")
+
+  displayOrder Int      @default(0) @map("display_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([entityTypeId, key])
+  @@map("field_definitions")
+}
+
+// A numeric-range qualification gate against one project-defined field —
+// generalizes the old hardcoded AUM-min/AUM-max MandateSettings singleton.
+model QualificationRule {
+  id        String   @id @default(uuid())
+  projectId String   @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id])
+  fieldKey  String   @map("field_key")
+  label     String?
+  min       Decimal? @db.Decimal(20, 2)
+  max       Decimal? @db.Decimal(20, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("qualification_rules")
+}
+
+// The generic replacement for the old fixed `Firm` model. Field values live
+// in `data`, keyed by the owning EntityType's FieldDefinition.key — same
+// pattern the old Firm.strategies/focusAreas JSON blobs already used, just
+// generalized to every field instead of two.
+model Entity {
+  id           String     @id @default(uuid())
+  projectId    String     @map("project_id")
+  project      Project    @relation(fields: [projectId], references: [id])
+  entityTypeId String     @map("entity_type_id")
+  entityType   EntityType @relation(fields: [entityTypeId], references: [id])
+  name         String
+  ownerId      String?    @map("owner_id")
+  owner        User?      @relation("EntityOwner", fields: [ownerId], references: [id])
+  data         Json       @default("{}")
+
+  classificationStatus ClassificationStatus  @default(unclassified) @map("classification_status")
   classificationSource ClassificationSource? @map("classification_source")
   classifiedAt         DateTime?             @map("classified_at")
 
-  sourceType     SourceType @default(manual_add) @map("source_type")
-  similarTo      String[]   @default([]) @map("similar_to")
-  populateRunId  String?    @map("populate_run_id")
-  populateRun    PopulateRun? @relation(fields: [populateRunId], references: [id])
+  sourceType    SourceType   @default(manual_add) @map("source_type")
+  similarTo     String[]     @default([]) @map("similar_to")
+  populateRunId String?      @map("populate_run_id")
+  populateRun   PopulateRun? @relation(fields: [populateRunId], references: [id])
 
-  deletedAt DateTime? @map("deleted_at")
-  deletedById String? @map("deleted_by")
-  deletedBy User? @relation("FirmDeletedBy", fields: [deletedById], references: [id])
+  deletedAt   DateTime? @map("deleted_at")
+  deletedById String?   @map("deleted_by")
+  deletedBy   User?     @relation("EntityDeletedBy", fields: [deletedById], references: [id])
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   contacts        Contact[]
-  crmStage        CrmStageRow?
+  stage           EntityStage?
   activityLog     ActivityLog[]
   emailThreads    EmailThread[]
   meetings        Meeting[]
   tasks           Task[]
-  comparablesFrom PopulateRun[] @relation("SeedFirm")
-  projectFirms    ProjectFirm[]
+  comparablesFrom PopulateRun[] @relation("SeedEntity")
 
-  @@map("firms")
+  @@map("entities")
 }
 
 model Contact {
-  id               String      @id @default(uuid())
-  firmId           String      @map("firm_id")
-  firm             Firm        @relation(fields: [firmId], references: [id])
-  name             String
-  title            String?
-  email            String?
-  emailStatus      EmailStatus @default(unknown) @map("email_status")
-  emailSource      String?     @map("email_source")
-  alternateEmails  String[]    @default([]) @map("alternate_emails")
-  linkedinUrl      String?     @map("linkedin_url")
-  rank             Int         @default(1)
-  isPrimaryBdContact Boolean   @default(false) @map("is_primary_bd_contact")
-  removedAt        DateTime?   @map("removed_at")
+  id                 String      @id @default(uuid())
+  entityId           String      @map("entity_id")
+  entity             Entity      @relation(fields: [entityId], references: [id])
+  name               String
+  title              String?
+  email              String?
+  emailStatus        EmailStatus @default(unknown) @map("email_status")
+  emailSource        String?     @map("email_source")
+  alternateEmails    String[]    @default([]) @map("alternate_emails")
+  linkedinUrl        String?     @map("linkedin_url")
+  rank               Int         @default(1)
+  isPrimaryBdContact Boolean     @default(false) @map("is_primary_bd_contact")
+  removedAt          DateTime?   @map("removed_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -320,27 +414,66 @@ model Contact {
   @@map("contacts")
 }
 
-model CrmStageRow {
-  id                String    @id @default(uuid())
-  firmId            String    @unique @map("firm_id")
-  firm              Firm      @relation(fields: [firmId], references: [id])
-  stage             CrmStage  @default(not_contacted)
-  stageChangedAt    DateTime  @default(now()) @map("stage_changed_at")
-  ownerId           String?   @map("owner")
-  owner             User?     @relation("StageOwner", fields: [ownerId], references: [id])
-  nextFollowUpDate  DateTime? @map("next_follow_up_date") @db.Date
-  dealNotes         String?   @map("deal_notes") @db.Text
+// Ordered, per-project pipeline stage. Replaces the fixed CrmStage enum.
+// positiveNextStageId/negativeNextStageId are plain id references (no FK
+// constraint, same "flexible reference" pattern ResearchSource already
+// uses) so a stage can point forward without Prisma's self-relation
+// ceremony — validated at the application layer instead.
+model PipelineStage {
+  id    String @id @default(uuid())
+  projectId String @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id])
+  key   String
+  label String
+  color String @default("#6b7280")
+  order Int
+
+  /// If set, entering this stage auto-creates a pending task with this
+  /// title (idempotent — only if no open task with this title exists yet).
+  autoTaskTitle String? @map("auto_task_title")
+  /// If set, entering this stage auto-creates this checklist of tasks
+  /// (idempotent by title, same as autoTaskTitle).
+  autoChecklist String[] @default([]) @map("auto_checklist")
+  /// If true, this stage is a one-way terminal state — once entered, the
+  /// entity can't be moved to another stage (generalizes Do-Not-Contact).
+  isTerminal Boolean @default(false) @map("is_terminal")
+  /// "Log outcome" action targets — a stage can optionally define where a
+  /// positive/negative outcome moves the entity to next.
+  positiveNextStageId String? @map("positive_next_stage_id")
+  negativeNextStageId String? @map("negative_next_stage_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  entityStages EntityStage[]
+
+  @@unique([projectId, key])
+  @@map("pipeline_stages")
+}
+
+// Replaces CrmStageRow — an entity's current position in its project's
+// pipeline.
+model EntityStage {
+  id               String        @id @default(uuid())
+  entityId         String        @unique @map("entity_id")
+  entity           Entity        @relation(fields: [entityId], references: [id])
+  stageId          String        @map("stage_id")
+  stage            PipelineStage @relation(fields: [stageId], references: [id])
+  stageChangedAt   DateTime      @default(now()) @map("stage_changed_at")
+  ownerId          String?       @map("owner")
+  owner            User?         @relation("StageOwner", fields: [ownerId], references: [id])
+  nextFollowUpDate DateTime?     @map("next_follow_up_date") @db.Date
+  dealNotes        String?       @map("deal_notes") @db.Text
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("crm_stages")
+  @@map("entity_stages")
 }
 
 model ActivityLog {
   id        String       @id @default(uuid())
-  firmId    String       @map("firm_id")
-  firm      Firm         @relation(fields: [firmId], references: [id])
+  entityId  String       @map("entity_id")
+  entity    Entity       @relation(fields: [entityId], references: [id])
   contactId String?      @map("contact_id")
   contact   Contact?     @relation(fields: [contactId], references: [id])
   type      ActivityType
@@ -353,12 +486,12 @@ model ActivityLog {
   @@map("activity_log")
 }
 
-// entity_id is polymorphic — it references either firms.id (entity_type
-// "firm") or contacts.id (entity_type "contact") depending on entity_type,
+// entity_id is polymorphic — it references either entities.id (entity_type
+// "entity") or contacts.id (entity_type "contact") depending on entity_type,
 // so it deliberately carries no foreign key constraint of its own.
 model ResearchSource {
   id                     String   @id @default(uuid())
-  entityType             String   @map("entity_type") // "firm" | "contact"
+  entityType             String   @map("entity_type") // "entity" | "contact"
   entityId               String   @map("entity_id")
   fieldName              String   @map("field_name")
   sourceUrlOrDescription String   @map("source_url_or_description") @db.Text
@@ -366,14 +499,6 @@ model ResearchSource {
 
   @@map("research_sources")
   @@index([entityType, entityId])
-}
-
-model MandateSettings {
-  id      Int     @id @default(1)
-  aumMin  Decimal @default(1000000000) @map("aum_min") @db.Decimal(20, 2)
-  aumMax  Decimal @default(15000000000) @map("aum_max") @db.Decimal(20, 2)
-
-  @@map("mandate_settings")
 }
 
 model AppSettings {
@@ -404,8 +529,8 @@ model EmailConnection {
 
 model EmailThread {
   id                   String       @id @default(uuid())
-  firmId               String?      @map("firm_id")
-  firm                 Firm?        @relation(fields: [firmId], references: [id])
+  entityId             String?      @map("entity_id")
+  entity               Entity?      @relation(fields: [entityId], references: [id])
   contactId            String?      @map("contact_id")
   contact              Contact?     @relation(fields: [contactId], references: [id])
   adHocRecipientName   String?      @map("ad_hoc_recipient_name")
@@ -446,29 +571,29 @@ model EmailMessage {
 // creates the real EmailThread/EmailMessage via the same send pipeline as
 // everything else, then removes the draft row.
 model MessageDraft {
-  id            String   @id @default(uuid())
-  createdById   String   @map("created_by_id")
-  createdBy     User     @relation(fields: [createdById], references: [id])
-  firmId        String?  @map("firm_id")
-  contactId     String?  @map("contact_id")
-  replyToThreadId String? @map("reply_to_thread_id")
-  toName        String?  @map("to_name")
-  toEmail       String?  @map("to_email")
-  ccEmails      String[] @default([]) @map("cc_emails")
-  bccEmails     String[] @default([]) @map("bcc_emails")
-  subject       String   @default("")
-  body          String   @default("") @db.Text
-  attachments   Json?
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  createdById     String   @map("created_by_id")
+  createdBy       User     @relation(fields: [createdById], references: [id])
+  entityId        String?  @map("entity_id")
+  contactId       String?  @map("contact_id")
+  replyToThreadId String?  @map("reply_to_thread_id")
+  toName          String?  @map("to_name")
+  toEmail         String?  @map("to_email")
+  ccEmails        String[] @default([]) @map("cc_emails")
+  bccEmails       String[] @default([]) @map("bcc_emails")
+  subject         String   @default("")
+  body            String   @default("") @db.Text
+  attachments     Json?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("message_drafts")
 }
 
 model Meeting {
   id                  String        @id @default(uuid())
-  firmId              String        @map("firm_id")
-  firm                Firm          @relation(fields: [firmId], references: [id])
+  entityId            String        @map("entity_id")
+  entity              Entity        @relation(fields: [entityId], references: [id])
   contactId           String?       @map("contact_id")
   contact             Contact?      @relation(fields: [contactId], references: [id])
   adHocRecipientName  String?       @map("ad_hoc_recipient_name")
@@ -488,8 +613,8 @@ model Meeting {
 
 model Task {
   id             String       @id @default(uuid())
-  firmId         String       @map("firm_id")
-  firm           Firm         @relation(fields: [firmId], references: [id])
+  entityId       String       @map("entity_id")
+  entity         Entity       @relation(fields: [entityId], references: [id])
   contactId      String?      @map("contact_id")
   contact        Contact?     @relation(fields: [contactId], references: [id])
   projectId      String?      @map("project_id")
@@ -504,7 +629,7 @@ model Task {
   owner          User?        @relation("TaskOwner", fields: [ownerId], references: [id])
   createdAt      DateTime     @default(now()) @map("created_at")
   completedAt    DateTime?    @map("completed_at")
-  /// Groups the per-firm task rows created together from one multi-firm
+  /// Groups the per-entity task rows created together from one multi-entity
   /// "Add Task" submission, so the Project → Actions tab can offer a single
   /// "Send Email" button that executes across the whole batch at once.
   batchId        String?      @map("batch_id")
@@ -539,94 +664,33 @@ model TaskComment {
   @@map("task_comments")
 }
 
-// ────────────────────────────────────────────────────────────────────────
-// Projects — a workspace grouping firms, contacts, tasks, and team members
-// around one initiative. Never a separate workflow: every CRM-affecting
-// action taken from within a project (send email, schedule meeting, etc.)
-// goes through the same CRM pipeline/task engine as everywhere else in the
-// platform — see Task.projectId above and the Next Step engine in
-// crm-stages.ts.
-// ────────────────────────────────────────────────────────────────────────
-
-model Project {
-  id          String        @id @default(uuid())
-  name        String
-  description String?       @db.Text
-  type        String?
-  status      ProjectStatus @default(active)
-  startDate   DateTime      @map("start_date") @db.Date
-  dueDate     DateTime?     @map("due_date") @db.Date
-  ownerId     String        @map("owner_id")
-  owner       User          @relation("ProjectOwner", fields: [ownerId], references: [id])
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  /// AI-generated, project-specific classification structure — same shape
-  /// as the global STRATEGIES_TAXONOMY ({ "Parent": ["Child", ...] }), but
-  /// scoped to this project only and never touching the global taxonomy.
-  /// Null until the user has generated + confirmed one.
-  taxonomy            Json?     @map("taxonomy")
-  taxonomyDescription String?   @map("taxonomy_description") @db.Text
-  taxonomyConfirmedAt DateTime? @map("taxonomy_confirmed_at")
-
-  members ProjectMember[]
-  firms   ProjectFirm[]
-  tasks   Task[]
-
-  @@map("projects")
-}
-
-model ProjectMember {
-  id        String   @id @default(uuid())
-  projectId String   @map("project_id")
-  project   Project  @relation(fields: [projectId], references: [id])
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id])
-  addedAt   DateTime @default(now()) @map("added_at")
-
-  @@unique([projectId, userId])
-  @@map("project_members")
-}
-
-model ProjectFirm {
-  id        String   @id @default(uuid())
-  projectId String   @map("project_id")
-  project   Project  @relation(fields: [projectId], references: [id])
-  firmId    String   @map("firm_id")
-  firm      Firm     @relation(fields: [firmId], references: [id])
-  addedAt   DateTime @default(now()) @map("added_at")
-
-  @@unique([projectId, firmId])
-  @@map("project_firms")
-}
-
 model PopulateRun {
   id                     String       @id @default(uuid())
   mode                   PopulateMode
-  seedFirmId             String?      @map("seed_firm_id")
-  seedFirm               Firm?        @relation("SeedFirm", fields: [seedFirmId], references: [id])
+  seedEntityId           String?      @map("seed_entity_id")
+  seedEntity             Entity?      @relation("SeedEntity", fields: [seedEntityId], references: [id])
   criteria               Json?
   triggeredById          String       @map("triggered_by")
   triggeredBy            User         @relation(fields: [triggeredById], references: [id])
   triggeredAt            DateTime     @default(now()) @map("triggered_at")
-  firmsFound             Int          @default(0) @map("firms_found")
-  firmsAdded             Int          @default(0) @map("firms_added")
-  firmsSkippedDuplicate  Int          @default(0) @map("firms_skipped_duplicate")
+  entitiesFound            Int        @default(0) @map("entities_found")
+  entitiesAdded            Int        @default(0) @map("entities_added")
+  entitiesSkippedDuplicate Int        @default(0) @map("entities_skipped_duplicate")
 
-  firmsProduced Firm[]
+  entitiesProduced Entity[]
 
   @@map("populate_runs")
 }
 
 model Notification {
-  id             String           @id @default(uuid())
-  userId         String           @map("user_id")
-  user           User             @relation(fields: [userId], references: [id])
-  type           NotificationType
-  relatedFirmId  String?          @map("related_firm_id")
-  body           String
-  isRead         Boolean          @default(false) @map("is_read")
-  createdAt      DateTime         @default(now()) @map("created_at")
+  id              String           @id @default(uuid())
+  userId          String           @map("user_id")
+  user            User             @relation(fields: [userId], references: [id])
+  type            NotificationType
+  relatedEntityId String?          @map("related_entity_id")
+  body            String
+  isRead          Boolean          @default(false) @map("is_read")
+  createdAt       DateTime         @default(now()) @map("created_at")
 
   @@map("notifications")
 }

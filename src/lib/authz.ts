@@ -12,11 +12,11 @@ export async function hasPermission(user: SessionUser, permission: Permission): 
   return perms.includes(permission);
 }
 
-/** Section 5.13 step 8 — data_scope filter applied to firm/contact/task queries. */
+/** Section 5.13 step 8 — data_scope filter applied to entity/contact/task queries. */
 export async function firmScopeWhere(user: SessionUser) {
   const role = await getUserRole(user);
   if (role.dataScope === "all_firms") return {};
-  return { crmStage: { ownerId: user.id } };
+  return { stage: { ownerId: user.id } };
 }
 
 /** Same data_scope rule applied to projects: all_firms roles see every project; everyone else sees only projects they own or are a member of. */

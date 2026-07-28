@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const draft = await prisma.messageDraft.create({
     data: {
       createdById: user.id,
-      firmId: body.firmId || null,
+      entityId: body.entityId || null,
       contactId: body.contactId || null,
       replyToThreadId: body.replyToThreadId || null,
       toName: body.toName || null,

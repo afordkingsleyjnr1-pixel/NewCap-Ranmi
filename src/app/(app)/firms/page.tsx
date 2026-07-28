@@ -8,10 +8,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Search, X, Sparkles, Bell, ChevronDown } from "lucide-react";
 import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 import { STAGE_LABELS, STAGE_COLORS, CRM_STAGES } from "@/lib/crm-stages";
-import { AddFirmModal } from "./_components/add-firm-modal";
+import { AddFirmModal } from "./_components/add-entity-modal";
 import { PopulateModal } from "./_components/populate-modal";
-import { FirmDrawer } from "./_components/firm-drawer";
-import { FirmContextMenu, type FirmContextMenuTarget } from "./_components/firm-context-menu";
+import { FirmDrawer } from "./_components/entity-drawer";
+import { FirmContextMenu, type FirmContextMenuTarget } from "./_components/entity-context-menu";
 import { AddToProjectModal } from "./_components/add-to-project-modal";
 import { QuickAddTaskModal } from "./_components/quick-add-task-modal";
 import { AddNoteModal } from "./_components/add-note-modal";
@@ -22,7 +22,7 @@ import { useSearchParams } from "next/navigation";
 
 export default function FirmsPage() {
   const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
-  const [firms, setFirms] = useState<FirmListItem[]>([]);
+  const [entities, setFirms] = useState<FirmListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [strategyParent, setStrategyParent] = useState("");
@@ -73,9 +73,9 @@ export default function FirmsPage() {
     if (domainResolutionStatus) qs.set("domainResolutionStatus", domainResolutionStatus);
     if (withinMandate) qs.set("withinMandate", withinMandate);
     if (projectId) qs.set("projectId", projectId);
-    const res = await fetch(`/api/firms?${qs.toString()}`);
+    const res = await fetch(`/api/entities?${qs.toString()}`);
     const data = await res.json();
-    setFirms(data.firms ?? []);
+    setFirms(data.entities ?? []);
     setLoading(false);
   }, [search, strategyParent, focusParent, stage, sourceType, classificationStatus, domainResolutionStatus, withinMandate, projectId]);
 
@@ -115,7 +115,7 @@ export default function FirmsPage() {
   }
 
   async function bulkAction(action: string, extra?: Record<string, unknown>) {
-    await fetch("/api/firms/bulk", { method: "POST", body: JSON.stringify({ action, firmIds: Array.from(selected), ...extra }) });
+    await fetch("/api/entities/bulk", { method: "POST", body: JSON.stringify({ action, firmIds: Array.from(selected), ...extra }) });
     setSelected(new Set());
     load();
   }
@@ -132,18 +132,18 @@ export default function FirmsPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">Firms Database</h1>
-          <p className="text-sm text-text-secondary">{firms.length} firms</p>
+          <h1 className="text-xl font-semibold text-text-primary">Entities Database</h1>
+          <p className="text-sm text-text-secondary">{entities.length} entities</p>
         </div>
         <Button onClick={() => setAddOpen(true)}>
-          <Plus className="h-4 w-4" /> Add Firm
+          <Plus className="h-4 w-4" /> Add Entity
         </Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-text-secondary" />
-          <Input placeholder="Search firms…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48 pl-8" />
+          <Input placeholder="Search entities…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-48 pl-8" />
         </div>
         <Select value={strategyParent} onChange={(e) => setStrategyParent(e.target.value)} className="w-44">
           <option value="">All Strategies</option>
@@ -209,7 +209,7 @@ export default function FirmsPage() {
         <div className="flex items-center gap-3 rounded-lg border border-accent/30 bg-status-blue-bg px-4 py-2.5 text-sm">
           <span className="font-medium text-text-primary">{selected.size} selected</span>
           <Button size="sm" variant="outline" onClick={() => bulkAction("find_similar")}>
-            Find Similar Firms
+            Find Similar Entities
           </Button>
           <Button size="sm" variant="outline" onClick={() => bulkAction("delete")}>
             Bulk Delete
@@ -284,7 +284,7 @@ export default function FirmsPage() {
           <thead>
             <tr>
               <th className="w-8"></th>
-              <th>Firm Name</th>
+              <th>Entity Name</th>
               <th>HQ</th>
               <th>Strategies</th>
               <th>Focus Areas</th>
@@ -304,55 +304,55 @@ export default function FirmsPage() {
                 </td>
               </tr>
             )}
-            {!loading && firms.length === 0 && (
+            {!loading && entities.length === 0 && (
               <tr>
                 <td colSpan={11} className="py-8 text-center text-text-secondary">
-                  No firms yet. Click Add Firm to get started.
+                  No entities yet. Click Add Entity to get started.
                 </td>
               </tr>
             )}
-            {firms.map((firm) => {
-              const primaryContact = firm.contacts[0];
+            {entities.map((entity) => {
+              const primaryContact = entity.contacts[0];
               return (
                 <tr
-                  key={firm.id}
-                  onClick={() => setOpenFirmId(firm.id)}
+                  key={entity.id}
+                  onClick={() => setOpenFirmId(entity.id)}
                   onContextMenu={(e) => {
                     e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, firmId: firm.id, firmName: firm.name, domain: firm.domain });
+                    setContextMenu({ x: e.clientX, y: e.clientY, entityId: entity.id, firmName: entity.name, domain: entity.domain });
                   }}
                 >
                   <td onClick={(e) => e.stopPropagation()}>
-                    <Checkbox checked={selected.has(firm.id)} onCheckedChange={() => toggleSelect(firm.id)} />
+                    <Checkbox checked={selected.has(entity.id)} onCheckedChange={() => toggleSelect(entity.id)} />
                   </td>
-                  <td className="font-medium text-text-primary">{firm.name}</td>
-                  <td className="text-text-secondary">{firm.hqLocation ?? "—"}</td>
+                  <td className="font-medium text-text-primary">{entity.name}</td>
+                  <td className="text-text-secondary">{entity.hqLocation ?? "—"}</td>
                   <td>
                     <div className="flex flex-wrap gap-1">
-                      {Object.keys(firm.strategies ?? {}).slice(0, 3).map((s) => (
+                      {Object.keys(entity.strategies ?? {}).slice(0, 3).map((s) => (
                         <TagPill key={s}>{s}</TagPill>
                       ))}
                     </div>
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-1">
-                      {Object.keys(firm.focusAreas ?? {}).slice(0, 3).map((s) => (
+                      {Object.keys(entity.focusAreas ?? {}).slice(0, 3).map((s) => (
                         <TagPill key={s}>{s}</TagPill>
                       ))}
                     </div>
                   </td>
-                  <td className="font-medium text-text-primary">{firm.aumDisplay ?? "NA"}</td>
+                  <td className="font-medium text-text-primary">{entity.aumDisplay ?? "NA"}</td>
                   <td>
-                    {firm.crmStage && <Pill color={STAGE_COLORS[firm.crmStage.stage]}>{STAGE_LABELS[firm.crmStage.stage]}</Pill>}
+                    {entity.stage && <Pill color={STAGE_COLORS[entity.stage.stage]}>{STAGE_LABELS[entity.stage.stage]}</Pill>}
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <NextStepCell firm={firm} onAction={handleAction} />
+                    <NextStepCell entity={entity} onAction={handleAction} />
                   </td>
                   <td>
-                    {firm.unreadNotifications > 0 && (
-                      <span className="flex items-center gap-1 text-status-red" title={`${firm.unreadNotifications} unread notification(s)`}>
+                    {entity.unreadNotifications > 0 && (
+                      <span className="flex items-center gap-1 text-status-red" title={`${entity.unreadNotifications} unread notification(s)`}>
                         <Bell className="h-3.5 w-3.5" />
-                        <span className="text-xs font-medium">{firm.unreadNotifications}</span>
+                        <span className="text-xs font-medium">{entity.unreadNotifications}</span>
                       </span>
                     )}
                   </td>
@@ -385,7 +385,7 @@ export default function FirmsPage() {
         initialStrategies={populateCriteria.strategies}
         initialFocusAreas={populateCriteria.focusAreas}
       />
-      <FirmDrawer firmId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
+      <FirmDrawer entityId={openFirmId} onClose={() => setOpenFirmId(null)} onChanged={load} />
       {modals}
 
       {contextMenu && (
@@ -393,33 +393,33 @@ export default function FirmsPage() {
           target={contextMenu}
           onClose={() => setContextMenu(null)}
           onEdit={() => {
-            setOpenFirmId(contextMenu.firmId);
+            setOpenFirmId(contextMenu.entityId);
             setContextMenu(null);
           }}
           onAddToProject={() => {
-            setAddToProjectTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setAddToProjectTarget({ id: contextMenu.entityId, name: contextMenu.firmName });
             setContextMenu(null);
           }}
           onAssignOwner={async (userId) => {
-            await fetch(`/api/firms/${contextMenu.firmId}`, { method: "PATCH", body: JSON.stringify({ ownerId: userId }) });
+            await fetch(`/api/entities/${contextMenu.entityId}`, { method: "PATCH", body: JSON.stringify({ ownerId: userId }) });
             setContextMenu(null);
             load();
           }}
           onAddTask={() => {
-            setAddTaskTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setAddTaskTarget({ id: contextMenu.entityId, name: contextMenu.firmName });
             setContextMenu(null);
           }}
           onAddNote={() => {
-            setAddNoteTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setAddNoteTarget({ id: contextMenu.entityId, name: contextMenu.firmName });
             setContextMenu(null);
           }}
           onFindSimilar={() => {
-            setContextPopulateTarget({ id: contextMenu.firmId, name: contextMenu.firmName });
+            setContextPopulateTarget({ id: contextMenu.entityId, name: contextMenu.firmName });
             setContextMenu(null);
           }}
           onDelete={async () => {
-            if (confirm(`Delete ${contextMenu.firmName}? This soft-deletes the firm — it can be restored later from Settings.`)) {
-              await fetch(`/api/firms/${contextMenu.firmId}`, { method: "DELETE" });
+            if (confirm(`Delete ${contextMenu.firmName}? This soft-deletes the entity — it can be restored later from Settings.`)) {
+              await fetch(`/api/entities/${contextMenu.entityId}`, { method: "DELETE" });
               load();
             }
             setContextMenu(null);
@@ -430,21 +430,21 @@ export default function FirmsPage() {
       <AddToProjectModal
         open={!!addToProjectTarget}
         onOpenChange={(o) => !o && setAddToProjectTarget(null)}
-        firmId={addToProjectTarget?.id ?? null}
+        entityId={addToProjectTarget?.id ?? null}
         firmName={addToProjectTarget?.name}
         onAdded={load}
       />
       <QuickAddTaskModal
         open={!!addTaskTarget}
         onOpenChange={(o) => !o && setAddTaskTarget(null)}
-        firmId={addTaskTarget?.id ?? null}
+        entityId={addTaskTarget?.id ?? null}
         firmName={addTaskTarget?.name}
         onAdded={load}
       />
       <AddNoteModal
         open={!!addNoteTarget}
         onOpenChange={(o) => !o && setAddNoteTarget(null)}
-        firmId={addNoteTarget?.id ?? null}
+        entityId={addNoteTarget?.id ?? null}
         firmName={addNoteTarget?.name}
         onAdded={load}
       />
@@ -454,7 +454,7 @@ export default function FirmsPage() {
           onOpenChange={(o) => !o && setContextPopulateTarget(null)}
           onDone={load}
           initialMode="similar_to_firm"
-          seedFirmId={contextPopulateTarget.id}
+          seedEntityId={contextPopulateTarget.id}
           seedFirmName={contextPopulateTarget.name}
         />
       )}

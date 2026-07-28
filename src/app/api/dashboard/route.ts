@@ -15,46 +15,46 @@ export async function GET() {
   const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const [totalManagers, followUpsPending, activeDeals, closedWonCount] = await Promise.all([
-    prisma.firm.count({ where: { deletedAt: null, ...scope } }),
-    prisma.crmStageRow.count({
+    prisma.entity.count({ where: { deletedAt: null, ...scope } }),
+    prisma.entityStage.count({
       where: {
-        firm: { deletedAt: null, ...scope },
+        entity: { deletedAt: null, ...scope },
         OR: [{ stage: "follow_up_due" }, { nextFollowUpDate: { lte: weekFromNow } }],
       },
     }),
-    prisma.crmStageRow.count({ where: { firm: { deletedAt: null, ...scope }, stage: { in: [...ACTIVE_DEAL_STAGES] } } }),
-    prisma.crmStageRow.count({ where: { firm: { deletedAt: null, ...scope }, stage: "closed_won" } }),
+    prisma.entityStage.count({ where: { entity: { deletedAt: null, ...scope }, stage: { in: [...ACTIVE_DEAL_STAGES] } } }),
+    prisma.entityStage.count({ where: { entity: { deletedAt: null, ...scope }, stage: "closed_won" } }),
   ]);
 
-  const followUpsDue = await prisma.crmStageRow.findMany({
-    where: { firm: { deletedAt: null, ...scope }, nextFollowUpDate: { lte: weekFromNow } },
-    include: { firm: true },
+  const followUpsDue = await prisma.entityStage.findMany({
+    where: { entity: { deletedAt: null, ...scope }, nextFollowUpDate: { lte: weekFromNow } },
+    include: { entity: true },
     orderBy: { nextFollowUpDate: "asc" },
   });
 
   const awaitingTriage = await prisma.emailThread.findMany({
-    where: { status: "replied", firm: { deletedAt: null, ...scope } },
-    include: { firm: true },
+    where: { status: "replied", entity: { deletedAt: null, ...scope } },
+    include: { entity: true },
     orderBy: { lastActivityAt: "desc" },
     take: 10,
   });
 
   const upcomingMeetings = await prisma.meeting.findMany({
-    where: { status: "scheduled", startTime: { gte: now, lte: weekFromNow }, firm: { deletedAt: null, ...scope } },
-    include: { firm: true, contact: true },
+    where: { status: "scheduled", startTime: { gte: now, lte: weekFromNow }, entity: { deletedAt: null, ...scope } },
+    include: { entity: true, contact: true },
     orderBy: { startTime: "asc" },
   });
 
-  const recentlyClosedWon = await prisma.crmStageRow.findMany({
-    where: { stage: "closed_won", firm: { deletedAt: null, ...scope } },
-    include: { firm: true },
+  const recentlyClosedWon = await prisma.entityStage.findMany({
+    where: { stage: "closed_won", entity: { deletedAt: null, ...scope } },
+    include: { entity: true },
     orderBy: { stageChangedAt: "desc" },
     take: 10,
   });
 
   const recentActivity = await prisma.activityLog.findMany({
-    where: { firm: { deletedAt: null, ...scope } },
-    include: { firm: true },
+    where: { entity: { deletedAt: null, ...scope } },
+    include: { entity: true },
     orderBy: { createdAt: "desc" },
     take: 20,
   });

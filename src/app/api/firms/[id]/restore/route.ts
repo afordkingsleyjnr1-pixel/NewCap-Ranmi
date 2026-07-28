@@ -12,6 +12,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     throw e;
   }
   const { id } = await params;
-  const firm = await prisma.firm.update({ where: { id }, data: { deletedAt: null, deletedById: null } });
-  return NextResponse.json({ firm });
+  const entity = await prisma.entity.update({ where: { id }, data: { deletedAt: null, deletedById: null } });
+  return NextResponse.json({ entity });
 }

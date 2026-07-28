@@ -6,7 +6,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2, Sparkles, Save } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
-import { ProjectAddFirmModal } from "./project-add-firm-modal";
+import { ProjectAddFirmModal } from "./project-add-entity-modal";
 
 type Taxonomy = Record<string, string[]>;
 
@@ -130,7 +130,7 @@ export function ProjectTaxonomyTab({
     <div className="space-y-4 pt-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-text-secondary">
-          Add firms to this project using its own taxonomy, separate from the main Firm Database's Add Firm flow.
+          Add entities to this project using its own taxonomy, separate from the main Entity Database's Add Entity flow.
         </p>
         <Button
           size="sm"
@@ -138,14 +138,14 @@ export function ProjectTaxonomyTab({
           disabled={!confirmedAt || !initialTaxonomy}
           title={!confirmedAt ? "Confirm & save a taxonomy below first" : undefined}
         >
-          <Plus className="h-3.5 w-3.5" /> Add Firm
+          <Plus className="h-3.5 w-3.5" /> Add Entity
         </Button>
       </div>
 
       <div className="rounded-lg border border-border bg-surface p-4">
         <p className="mb-2 text-sm font-medium text-text-primary">Project Focus Description</p>
         <p className="mb-2 text-xs text-text-secondary">
-          Describe this project in plain language — the AI proposes a classification structure just for this project's firms. Review, edit, or
+          Describe this project in plain language — the AI proposes a classification structure just for this project's entities. Review, edit, or
           regenerate before saving; it never touches the platform's global Strategies/Focus Areas taxonomy.
         </p>
         <Textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Sourcing emerging-manager hedge funds in Asia focused on multi-strategy and credit…" />

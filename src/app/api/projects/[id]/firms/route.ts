@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 
-// Section: Projects Module step 3 — Add Firms to a Project (one or many).
+// Section: Projects Module step 3 — Add Entities to a Project (one or many).
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
   try {
@@ -15,11 +15,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id: projectId } = await params;
   const { firmIds } = (await req.json()) as { firmIds: string[] };
   if (!Array.isArray(firmIds) || firmIds.length === 0) {
-    return NextResponse.json({ error: "Provide at least one firm" }, { status: 400 });
+    return NextResponse.json({ error: "Provide at least one entity" }, { status: 400 });
   }
 
   await prisma.projectFirm.createMany({
-    data: firmIds.map((firmId) => ({ projectId, firmId })),
+    data: firmIds.map((entityId) => ({ projectId, entityId })),
     skipDuplicates: true,
   });
 

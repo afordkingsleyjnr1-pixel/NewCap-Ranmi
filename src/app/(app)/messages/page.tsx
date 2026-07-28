@@ -56,12 +56,12 @@ interface Thread {
   deletedAt: string | null;
   adHocRecipientName: string | null;
   adHocRecipientEmail: string | null;
-  firm:
+  entity:
     | {
         id: string;
         name: string;
         projectFirms: Array<{ project: { id: string; name: string } }>;
-        crmStage: { owner: { id: string; name: string } | null } | null;
+        stage: { owner: { id: string; name: string } | null } | null;
       }
     | null;
   contact: { id: string; name: string; email: string | null } | null;
@@ -218,7 +218,7 @@ export default function MessagesPage() {
     return () => clearInterval(interval);
   }, [folder, loadThreads]);
 
-  // Firm/contact/subject search is applied client-side over the (already
+  // Entity/contact/subject search is applied client-side over the (already
   // server-filtered by folder/project/owner/status/date) thread list —
   // same tradeoff as the rest of this list: everything's fetched up front,
   // so a text match doesn't need its own round trip.
@@ -226,7 +226,7 @@ export default function MessagesPage() {
     if (!search.trim()) return threads;
     const q = search.trim().toLowerCase();
     return threads.filter(
-      (t) => t.subject.toLowerCase().includes(q) || t.firm?.name.toLowerCase().includes(q) || t.contact?.name.toLowerCase().includes(q)
+      (t) => t.subject.toLowerCase().includes(q) || t.entity?.name.toLowerCase().includes(q) || t.contact?.name.toLowerCase().includes(q)
     );
   }, [threads, search]);
 
@@ -293,7 +293,7 @@ export default function MessagesPage() {
   }
 
   function listSenderLabel(t: Thread): string {
-    return t.firm ? t.firm.name : recipientLabel(t);
+    return t.entity ? t.entity.name : recipientLabel(t);
   }
 
   function initials(label: string): string {
@@ -406,7 +406,7 @@ export default function MessagesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Messages</h1>
-          <p className="text-sm text-text-secondary">Every email thread across every firm, plus free-form messages sent from here</p>
+          <p className="text-sm text-text-secondary">Every email thread across every entity, plus free-form messages sent from here</p>
         </div>
         <Button size="sm" variant="outline" onClick={() => load(true)} disabled={loading}>
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} /> Refresh
@@ -415,7 +415,7 @@ export default function MessagesPage() {
 
       {folder !== "drafts" && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface p-3">
-          <Input placeholder="Search firm, contact, subject…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
+          <Input placeholder="Search entity, contact, subject…" value={search} onChange={(e) => setSearch(e.target.value)} className="w-52" />
           <Select value={filterProjectId} onChange={(e) => setFilterProjectId(e.target.value)} className="w-40">
             <option value="">All Projects</option>
             {projects.map((p) => (
@@ -497,17 +497,17 @@ export default function MessagesPage() {
                   <div>
                     <h2 className="text-sm font-semibold text-text-primary">{active.subject}</h2>
                     <p className="text-xs text-text-secondary">
-                      {active.firm ? (
+                      {active.entity ? (
                         <>
-                          {active.firm.name} · {recipientLabel(active)}
+                          {active.entity.name} · {recipientLabel(active)}
                         </>
                       ) : (
                         recipientLabel(active)
                       )}
                     </p>
-                    {active.firm?.projectFirms && active.firm.projectFirms.length > 0 && (
+                    {active.entity?.projectFirms && active.entity.projectFirms.length > 0 && (
                       <div className="mt-1 flex flex-wrap gap-1">
-                        {active.firm.projectFirms.map((pf) => (
+                        {active.entity.projectFirms.map((pf) => (
                           <TagPill key={pf.project.id}>{pf.project.name}</TagPill>
                         ))}
                       </div>
@@ -766,7 +766,7 @@ export default function MessagesPage() {
                         >
                           <span className={cn("truncate text-sm text-text-primary", unread ? "font-bold" : "font-normal")}>{listSenderLabel(t)}</span>
                           <span className="min-w-0 truncate text-sm">
-                            {t.firm?.projectFirms?.[0] && <TagPill className="mr-1.5">{t.firm.projectFirms[0].project.name}</TagPill>}
+                            {t.entity?.projectFirms?.[0] && <TagPill className="mr-1.5">{t.entity.projectFirms[0].project.name}</TagPill>}
                             <span className={cn("text-text-primary", unread ? "font-bold" : "font-normal")}>{t.subject}</span>
                             <span className="text-text-secondary"> — {snippet(t)}</span>
                           </span>

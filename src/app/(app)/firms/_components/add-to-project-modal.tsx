@@ -13,13 +13,13 @@ interface ProjectOption {
 export function AddToProjectModal({
   open,
   onOpenChange,
-  firmId,
+  entityId,
   firmName,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firmId: string | null;
+  entityId: string | null;
   firmName?: string;
   onAdded: () => void;
 }) {
@@ -39,11 +39,11 @@ export function AddToProjectModal({
   }, [open]);
 
   async function addTo(projectId: string) {
-    if (!firmId) return;
+    if (!entityId) return;
     setLoading(projectId);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/firms`, { method: "POST", body: JSON.stringify({ firmIds: [firmId] }) });
+      const res = await fetch(`/api/projects/${projectId}/entities`, { method: "POST", body: JSON.stringify({ firmIds: [entityId] }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to add to project");

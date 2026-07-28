@@ -16,11 +16,11 @@ export async function GET(req: NextRequest) {
   const scope = await firmScopeWhere(user);
 
   const firmFilter: Prisma.FirmWhereInput = { deletedAt: null, ...scope };
-  if (stage) firmFilter.crmStage = { stage: stage as never };
+  if (stage) firmFilter.stage = { stage: stage as never };
 
   const where: Prisma.ContactWhereInput = {
     removedAt: null,
-    firm: firmFilter,
+    entity: firmFilter,
   };
   if (emailStatus) where.emailStatus = emailStatus as never;
   if (search) where.name = { contains: search, mode: "insensitive" };
@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
   const contacts = await prisma.contact.findMany({
     where,
     include: {
-      firm: {
+      entity: {
         include: {
-          crmStage: true,
+          stage: true,
           tasks: { where: { status: "open" }, orderBy: { createdAt: "asc" } },
           meetings: { where: { status: "scheduled" }, orderBy: { startTime: "desc" }, take: 1 },
         },

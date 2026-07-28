@@ -8,14 +8,14 @@ import { Pill } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
 
 interface Target {
-  firmId: string;
+  entityId: string;
   contactId?: string;
   firmName: string;
 }
 
 type Kind = "email" | "follow_up" | "term_sheet";
 
-// Section: Messaging Within Projects — send to multiple firms/contacts at
+// Section: Messaging Within Projects — send to multiple entities/contacts at
 // once. Reuses /api/projects/[id]/bulk-email, which runs each recipient
 // through the exact same send-and-CRM-stage-advance pipeline as a single
 // send (see lib/services/outreach.ts) — never a separate workflow.
@@ -39,7 +39,7 @@ export function BulkEmailModal({
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ sentCount: number; failedCount: number; results: Array<{ firmId: string; ok: boolean; error?: string }> } | null>(
+  const [result, setResult] = useState<{ sentCount: number; failedCount: number; results: Array<{ entityId: string; ok: boolean; error?: string }> } | null>(
     null
   );
 
@@ -76,7 +76,7 @@ export function BulkEmailModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title={`Send Bulk Email (${targets.length} firm${targets.length === 1 ? "" : "s"})`} widthClassName="max-w-2xl">
+    <Modal open={open} onOpenChange={onOpenChange} title={`Send Bulk Email (${targets.length} entity${targets.length === 1 ? "" : "s"})`} widthClassName="max-w-2xl">
       {result ? (
         <div className="space-y-3">
           <div className="flex gap-2">
@@ -87,7 +87,7 @@ export function BulkEmailModal({
             .filter((r) => !r.ok)
             .map((r, i) => (
               <p key={i} className="text-xs text-status-red">
-                {r.firmId}: {r.error}
+                {r.entityId}: {r.error}
               </p>
             ))}
           <div className="flex justify-end">
@@ -98,7 +98,7 @@ export function BulkEmailModal({
         <div className="space-y-3">
           {missingEmail.length > 0 && (
             <p className="rounded-md bg-status-amber-bg px-3 py-2 text-xs text-status-amber">
-              {missingEmail.length} of {targets.length} selected firm(s) have no contact with a known email and will be skipped: {missingEmail.map((t) => t.firmName).join(", ")}
+              {missingEmail.length} of {targets.length} selected entity(s) have no contact with a known email and will be skipped: {missingEmail.map((t) => t.firmName).join(", ")}
             </p>
           )}
           <div>

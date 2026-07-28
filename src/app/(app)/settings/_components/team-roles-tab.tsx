@@ -264,8 +264,8 @@ export function TeamRolesTab() {
           <div>
             <Label>Data Scope</Label>
             <Select value={newRoleScope} onChange={(e) => setNewRoleScope(e.target.value as any)}>
-              <option value="all_firms">All Firms</option>
-              <option value="owned_firms_only">Owned Firms Only</option>
+              <option value="all_firms">All Entities</option>
+              <option value="owned_firms_only">Owned Entities Only</option>
             </Select>
           </div>
           <div>
@@ -325,10 +325,10 @@ export function TeamRolesTab() {
         </div>
       </Modal>
 
-      <Modal open={!!reassignPrompt} onOpenChange={(o) => !o && setReassignPrompt(null)} title="Reassign Firms Before Deactivating">
+      <Modal open={!!reassignPrompt} onOpenChange={(o) => !o && setReassignPrompt(null)} title="Reassign Entities Before Deactivating">
         <div className="space-y-3">
           <p className="text-sm text-text-secondary">
-            This person owns {reassignPrompt?.count} firm(s). Choose who inherits them before deactivating.
+            This person owns {reassignPrompt?.count} entity(s). Choose who inherits them before deactivating.
           </p>
           <Select value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
             <option value="">— Select a user —</option>

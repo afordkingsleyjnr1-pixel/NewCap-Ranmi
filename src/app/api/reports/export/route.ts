@@ -18,24 +18,24 @@ export async function GET(req: NextRequest) {
   }
 
   const scope = await firmScopeWhere(user!);
-  const firms = await prisma.firm.findMany({
+  const entities = await prisma.entity.findMany({
     where: { deletedAt: null, ...scope },
     include: {
-      crmStage: { include: { owner: { select: { id: true, name: true } } } },
+      stage: { include: { owner: { select: { id: true, name: true } } } },
       contacts: { where: { removedAt: null }, orderBy: { rank: "asc" }, take: 1 },
     },
   });
 
-  const headers = ["Firm Name", "HQ", "Strategies", "Focus Areas", "AUM", "Within Mandate", "CRM Stage", "Owner", "Primary Contact", "Email", "Email Status"];
-  const rows = firms.map((f: any) => [
+  const headers = ["Entity Name", "HQ", "Strategies", "Focus Areas", "AUM", "Within Mandate", "CRM Stage", "Owner", "Primary Contact", "Email", "Email Status"];
+  const rows = entities.map((f: any) => [
     f.name,
     f.hqLocation ?? "",
     Object.keys(f.strategies as Record<string, string[]>).join("; "),
     Object.keys(f.focusAreas as Record<string, string[]>).join("; "),
     f.aumDisplay ?? "NA",
     f.withinMandate,
-    f.crmStage?.stage ?? "",
-    f.crmStage?.owner?.name ?? "",
+    f.stage?.stage ?? "",
+    f.stage?.owner?.name ?? "",
     f.contacts[0]?.name ?? "",
     f.contacts[0]?.email ?? "",
     f.contacts[0]?.emailStatus ?? "",
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="firms-export-${new Date().toISOString().slice(0, 10)}.csv"`,
+      "Content-Disposition": `attachment; filename="entities-export-${new Date().toISOString().slice(0, 10)}.csv"`,
     },
   });
 }

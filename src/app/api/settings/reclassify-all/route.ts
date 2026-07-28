@@ -13,16 +13,16 @@ export async function POST() {
     throw e;
   }
 
-  const firms = await prisma.firm.findMany({ where: { deletedAt: null } });
+  const entities = await prisma.entity.findMany({ where: { deletedAt: null } });
   let changed = 0;
 
-  for (const firm of firms) {
-    const before = JSON.stringify({ s: firm.strategies, f: firm.focusAreas });
-    const result = await classifyFirm({ firmName: firm.name, domain: firm.domain, strategyDetail: firm.strategyDetail });
-    await applyClassification(firm.id, result, { isReclassify: true });
-    const after = await prisma.firm.findUniqueOrThrow({ where: { id: firm.id } });
+  for (const entity of entities) {
+    const before = JSON.stringify({ s: entity.strategies, f: entity.focusAreas });
+    const result = await classifyFirm({ firmName: entity.name, domain: entity.domain, strategyDetail: entity.strategyDetail });
+    await applyClassification(entity.id, result, { isReclassify: true });
+    const after = await prisma.entity.findUniqueOrThrow({ where: { id: entity.id } });
     if (JSON.stringify({ s: after.strategies, f: after.focusAreas }) !== before) changed++;
   }
 
-  return NextResponse.json({ totalFirms: firms.length, changed });
+  return NextResponse.json({ totalFirms: entities.length, changed });
 }

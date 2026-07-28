@@ -18,21 +18,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
   const target = await prisma.user.findUniqueOrThrow({ where: { id } });
 
-  // Section 5.13 step 11 — deactivating forces reassignment of every firm they own first.
+  // Section 5.13 step 11 — deactivating forces reassignment of every entity they own first.
   if (body.action === "deactivate") {
-    const ownedFirms = await prisma.crmStageRow.findMany({ where: { ownerId: id } });
+    const ownedFirms = await prisma.entityStage.findMany({ where: { ownerId: id } });
     if (ownedFirms.length > 0 && !body.reassignToUserId) {
       return NextResponse.json(
-        { error: "REASSIGN_REQUIRED", ownedFirmsCount: ownedFirms.length, message: "Reassign this person's firms before deactivating." },
+        { error: "REASSIGN_REQUIRED", ownedFirmsCount: ownedFirms.length, message: "Reassign this person's entities before deactivating." },
         { status: 400 }
       );
     }
     if (ownedFirms.length > 0) {
-      await prisma.crmStageRow.updateMany({ where: { ownerId: id }, data: { ownerId: body.reassignToUserId } });
+      await prisma.entityStage.updateMany({ where: { ownerId: id }, data: { ownerId: body.reassignToUserId } });
       await createNotification({
         userId: body.reassignToUserId,
         type: "firms_reassigned",
-        body: `You've inherited ${ownedFirms.length} firm(s) from ${target.name}, who was deactivated.`,
+        body: `You've inherited ${ownedFirms.length} entity(s) from ${target.name}, who was deactivated.`,
       });
     }
     const updated = await prisma.user.update({ where: { id }, data: { status: "deactivated" } });
@@ -81,7 +81,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 // Permanently removes a user — only ever safe for someone who was never
 // truly "in" the workspace (still pending) or already fully offboarded
-// (deactivated, with their owned firms already reassigned). An active
+// (deactivated, with their owned entities already reassigned). An active
 // user must be deactivated first — that flow already forces reassignment
 // of everything they own before it's safe to remove them from view.
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

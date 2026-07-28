@@ -15,13 +15,13 @@ interface Contact {
 export function ScheduleMeetingModal({
   open,
   onOpenChange,
-  firmId,
+  entityId,
   firmName,
   onScheduled,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firmId: string | null;
+  entityId: string | null;
   firmName?: string;
   onScheduled: () => void;
 }) {
@@ -39,16 +39,16 @@ export function ScheduleMeetingModal({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open && firmId) {
-      fetch(`/api/firms/${firmId}`)
+    if (open && entityId) {
+      fetch(`/api/entities/${entityId}`)
         .then((r) => r.json())
         .then((data) => {
-          setContacts(data.firm.contacts ?? []);
-          if (data.firm.contacts?.[0]) setContactId(data.firm.contacts[0].id);
-          setTitle(`Call — ${data.firm.name}`);
+          setContacts(data.entity.contacts ?? []);
+          if (data.entity.contacts?.[0]) setContactId(data.entity.contacts[0].id);
+          setTitle(`Call — ${data.entity.name}`);
         });
     }
-  }, [open, firmId]);
+  }, [open, entityId]);
 
   async function submit() {
     setLoading(true);
@@ -59,7 +59,7 @@ export function ScheduleMeetingModal({
       const res = await fetch("/api/meetings", {
         method: "POST",
         body: JSON.stringify({
-          firmId,
+          entityId,
           contactId: contactId || undefined,
           adHocName: contactId ? undefined : adHocName,
           adHocEmail: contactId ? undefined : adHocEmail,

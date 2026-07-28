@@ -9,13 +9,13 @@ import { Loader2 } from "lucide-react";
 export function AddNoteModal({
   open,
   onOpenChange,
-  firmId,
+  entityId,
   firmName,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firmId: string | null;
+  entityId: string | null;
   firmName?: string;
   onAdded: () => void;
 }) {
@@ -31,11 +31,11 @@ export function AddNoteModal({
   }, [open]);
 
   async function submit() {
-    if (!firmId || !note.trim()) return;
+    if (!entityId || !note.trim()) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/firms/${firmId}/notes`, { method: "POST", body: JSON.stringify({ body: note }) });
+      const res = await fetch(`/api/entities/${entityId}/notes`, { method: "POST", body: JSON.stringify({ body: note }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to add note");

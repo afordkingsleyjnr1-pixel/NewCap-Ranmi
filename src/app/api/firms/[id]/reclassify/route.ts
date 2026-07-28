@@ -13,15 +13,15 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     throw e;
   }
   const { id } = await params;
-  const firm = await prisma.firm.findUniqueOrThrow({ where: { id } });
+  const entity = await prisma.entity.findUniqueOrThrow({ where: { id } });
 
   const result = await classifyFirm({
-    firmName: firm.name,
-    domain: firm.domain,
-    strategyDetail: firm.strategyDetail,
+    firmName: entity.name,
+    domain: entity.domain,
+    strategyDetail: entity.strategyDetail,
   });
   await applyClassification(id, result, { isReclassify: true });
 
-  const updated = await prisma.firm.findUniqueOrThrow({ where: { id } });
-  return NextResponse.json({ firm: updated, droppedTags: result.droppedTags });
+  const updated = await prisma.entity.findUniqueOrThrow({ where: { id } });
+  return NextResponse.json({ entity: updated, droppedTags: result.droppedTags });
 }

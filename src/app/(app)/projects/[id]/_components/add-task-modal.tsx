@@ -26,14 +26,14 @@ export function AddTaskModal({
   open,
   onOpenChange,
   projectId,
-  firms,
+  entities,
   members,
   onAdded,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   projectId: string;
-  firms: FirmOption[];
+  entities: FirmOption[];
   members: MemberOption[];
   onAdded: () => void;
 }) {
@@ -49,7 +49,7 @@ export function AddTaskModal({
 
   useEffect(() => {
     if (open) {
-      setFirmIds(new Set(firms[0] ? [firms[0].id] : []));
+      setFirmIds(new Set(entities[0] ? [entities[0].id] : []));
       setTitle("");
       setContactId("");
       setPriority("medium");
@@ -61,8 +61,8 @@ export function AddTaskModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const singleFirm = firmIds.size === 1 ? firms.find((f) => firmIds.has(f.id)) : null;
-  const allSelected = firms.length > 0 && firmIds.size === firms.length;
+  const singleFirm = firmIds.size === 1 ? entities.find((f) => firmIds.has(f.id)) : null;
+  const allSelected = entities.length > 0 && firmIds.size === entities.length;
 
   function toggleFirm(id: string) {
     setFirmIds((prev) => {
@@ -74,7 +74,7 @@ export function AddTaskModal({
   }
 
   function toggleAll() {
-    setFirmIds(allSelected ? new Set() : new Set(firms.map((f) => f.id)));
+    setFirmIds(allSelected ? new Set() : new Set(entities.map((f) => f.id)));
     setContactId("");
   }
 
@@ -119,13 +119,13 @@ export function AddTaskModal({
 
         <div>
           <div className="mb-1 flex items-center justify-between">
-            <Label>Related Firms</Label>
+            <Label>Related Entities</Label>
             <button onClick={toggleAll} className="text-xs text-accent hover:underline">
               {allSelected ? "Clear all" : "Select all"}
             </button>
           </div>
           <div className="max-h-36 space-y-1 overflow-y-auto rounded-md border border-border p-2">
-            {firms.map((f) => (
+            {entities.map((f) => (
               <label key={f.id} className="flex items-center gap-2 text-sm text-text-primary">
                 <Checkbox checked={firmIds.has(f.id)} onCheckedChange={() => toggleFirm(f.id)} />
                 {f.name}
@@ -183,7 +183,7 @@ export function AddTaskModal({
             Cancel
           </Button>
           <Button onClick={submit} disabled={loading || firmIds.size === 0 || !title.trim()}>
-            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add Task{firmIds.size > 1 ? ` (${firmIds.size} firms)` : ""}
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add Task{firmIds.size > 1 ? ` (${firmIds.size} entities)` : ""}
           </Button>
         </div>
       </div>

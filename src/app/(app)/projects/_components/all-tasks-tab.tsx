@@ -13,7 +13,7 @@ interface TaskRow {
   status: "open" | "done";
   priority: "low" | "medium" | "high";
   isFromTemplate: boolean;
-  firm: { id: string; name: string };
+  entity: { id: string; name: string };
   contact: { id: string; name: string } | null;
   owner: { name: string } | null;
   project: { id: string; name: string } | null;
@@ -50,7 +50,7 @@ export function AllTasksTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-text-secondary">Every open task across every firm, sorted by due date</p>
+      <p className="text-sm text-text-secondary">Every open task across every entity, sorted by due date</p>
 
       <div className="overflow-x-auto rounded-lg border border-border bg-surface">
         <table className="data-table">
@@ -58,7 +58,7 @@ export function AllTasksTab() {
             <tr>
               <th className="w-8"></th>
               <th>Task</th>
-              <th>Firm</th>
+              <th>Entity</th>
               <th>Contact</th>
               <th>Project</th>
               <th>Priority</th>
@@ -78,7 +78,7 @@ export function AllTasksTab() {
             {!loading && tasks.length === 0 && (
               <tr>
                 <td colSpan={9} className="py-8 text-center text-text-secondary">
-                  No open tasks. Checklists auto-generate when a firm reaches Term Sheet / LOI.
+                  No open tasks. Checklists auto-generate when a entity reaches Term Sheet / LOI.
                 </td>
               </tr>
             )}
@@ -93,7 +93,7 @@ export function AllTasksTab() {
                     {t.title}
                     {t.isFromTemplate && <Pill color="gray" className="ml-2">Checklist</Pill>}
                   </td>
-                  <td className="text-accent">{t.firm.name}</td>
+                  <td className="text-accent">{t.entity.name}</td>
                   <td className="text-text-secondary">{t.contact?.name ?? "—"}</td>
                   <td className="text-text-secondary">{t.project?.name ?? "—"}</td>
                   <td>

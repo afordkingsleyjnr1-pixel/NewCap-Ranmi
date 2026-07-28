@@ -19,33 +19,33 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case "stage_change": {
         await requirePermission(user, "edit_firms");
-        for (const firmId of firmIds) {
-          const before = await prisma.crmStageRow.findUnique({ where: { firmId } });
+        for (const entityId of firmIds) {
+          const before = await prisma.entityStage.findUnique({ where: { entityId } });
           if (before?.stage === "do_not_contact") continue; // hard stop, Section 5.6
-          await prisma.crmStageRow.update({ where: { firmId }, data: { stage: body.stage, stageChangedAt: new Date() } });
+          await prisma.entityStage.update({ where: { entityId }, data: { stage: body.stage, stageChangedAt: new Date() } });
           await prisma.activityLog.create({
-            data: { firmId, type: "stage_change", body: `Stage changed to ${body.stage} (bulk)`, createdById: user.id },
+            data: { entityId, type: "stage_change", body: `Stage changed to ${body.stage} (bulk)`, createdById: user.id },
           });
         }
         return NextResponse.json({ updated: firmIds.length });
       }
       case "assign_owner": {
         await requirePermission(user, "manage_team");
-        for (const firmId of firmIds) {
-          await prisma.crmStageRow.update({ where: { firmId }, data: { ownerId: body.ownerId } });
+        for (const entityId of firmIds) {
+          await prisma.entityStage.update({ where: { entityId }, data: { ownerId: body.ownerId } });
         }
         return NextResponse.json({ updated: firmIds.length });
       }
       case "delete": {
         await requirePermission(user, "edit_firms");
-        await prisma.firm.updateMany({ where: { id: { in: firmIds } }, data: { deletedAt: new Date(), deletedById: user.id } });
+        await prisma.entity.updateMany({ where: { id: { in: firmIds } }, data: { deletedAt: new Date(), deletedById: user.id } });
         return NextResponse.json({ updated: firmIds.length });
       }
       case "find_similar": {
         await requirePermission(user, "run_populate");
         const results = [];
-        for (const firmId of firmIds) {
-          const result = await runPopulate({ mode: "similar_to_firm", seedFirmId: firmId, triggeredById: user.id });
+        for (const entityId of firmIds) {
+          const result = await runPopulate({ mode: "similar_to_firm", seedEntityId: entityId, triggeredById: user.id });
           results.push(result);
         }
         return NextResponse.json({ results });

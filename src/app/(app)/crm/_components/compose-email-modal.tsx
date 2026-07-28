@@ -40,14 +40,14 @@ const KIND_TITLES: Record<ComposeKind, string> = {
 export function ComposeEmailModal({
   open,
   onOpenChange,
-  firmId,
+  entityId,
   firmName,
   kind = "email",
   onSent,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
-  firmId: string | null;
+  entityId: string | null;
   firmName?: string;
   kind?: ComposeKind;
   onSent: () => void;
@@ -71,25 +71,25 @@ export function ComposeEmailModal({
   }, [open]);
 
   useEffect(() => {
-    if (open && firmId) {
-      fetch(`/api/firms/${firmId}`)
+    if (open && entityId) {
+      fetch(`/api/entities/${entityId}`)
         .then((r) => r.json())
         .then((data) => {
-          setContacts(data.firm.contacts ?? []);
-          if (data.firm.contacts?.[0]) setContactId(data.firm.contacts[0].id);
+          setContacts(data.entity.contacts ?? []);
+          if (data.entity.contacts?.[0]) setContactId(data.entity.contacts[0].id);
           if (kind === "follow_up") {
-            setSubject(`Following up — ${data.firm.name}`);
+            setSubject(`Following up — ${data.entity.name}`);
             setMessage(`Hi,\n\nFollowing up on my note below — happy to share more detail whenever useful.\n\nBest,`);
           } else if (kind === "term_sheet") {
-            setSubject(`Term Sheet / LOI — ${data.firm.name}`);
+            setSubject(`Term Sheet / LOI — ${data.entity.name}`);
             setMessage(`Hi,\n\nPlease find attached our term sheet / letter of intent for your review.\n\nBest,`);
           } else {
-            setSubject(`Introduction — ${data.firm.name}`);
-            setMessage(`Hi,\n\nReaching out from Adcapital Partners / NCM International regarding a potential fit with ${data.firm.name}'s platform.\n\nBest,`);
+            setSubject(`Introduction — ${data.entity.name}`);
+            setMessage(`Hi,\n\nReaching out from Adcapital Partners / NCM International regarding a potential fit with ${data.entity.name}'s platform.\n\nBest,`);
           }
         });
     }
-  }, [open, firmId, kind]);
+  }, [open, entityId, kind]);
 
   async function handleFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -117,7 +117,7 @@ export function ComposeEmailModal({
       const res = await fetch("/api/outreach/send", {
         method: "POST",
         body: JSON.stringify({
-          firmId,
+          entityId,
           contactId: contactId || undefined,
           adHocName: contactId ? undefined : adHocName,
           adHocEmail: contactId ? undefined : adHocEmail,

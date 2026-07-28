@@ -6,9 +6,9 @@ import { attachmentsForStorage } from "./attachment-store";
  * Messages section — free-form send, shared by the compose modal, the
  * in-thread Reply composer, and sending a saved Draft. Deliberately bypasses
  * the CRM outreach pipeline (/api/outreach/send): no Do Not Contact gate, no
- * forced stage change, no pending-task completion. A firm/contact link is
+ * forced stage change, no pending-task completion. A entity/contact link is
  * optional and, if present, is for record-keeping only (shows on that
- * firm's Activity tab).
+ * entity's Activity tab).
  *
  * Pass `replyToThreadId` to send within an existing thread (Reply/Reply-All
  * style send from the Messages UI) instead of starting a new one — reuses
@@ -17,7 +17,7 @@ import { attachmentsForStorage } from "./attachment-store";
  */
 export async function sendFreeFormMessage(params: {
   userId: string;
-  firmId?: string | null;
+  entityId?: string | null;
   contactId?: string | null;
   toName?: string;
   toEmail?: string;
@@ -59,7 +59,7 @@ export async function sendFreeFormMessage(params: {
     existingThread ??
     (await prisma.emailThread.create({
       data: {
-        firmId: params.firmId || null,
+        entityId: params.entityId || null,
         contactId: params.contactId || null,
         adHocRecipientName: params.contactId ? null : params.toName || null,
         adHocRecipientEmail: params.contactId ? null : recipientEmail,
@@ -87,9 +87,9 @@ export async function sendFreeFormMessage(params: {
     },
   });
 
-  if (thread.firmId) {
+  if (thread.entityId) {
     await prisma.activityLog.create({
-      data: { firmId: thread.firmId, contactId: thread.contactId, type: "email_sent", body: `Message sent: "${params.subject}"`, createdById: params.userId },
+      data: { entityId: thread.entityId, contactId: thread.contactId, type: "email_sent", body: `Message sent: "${params.subject}"`, createdById: params.userId },
     });
   }
 

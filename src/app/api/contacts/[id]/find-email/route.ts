@@ -13,17 +13,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     throw e;
   }
   const { id } = await params;
-  const contact = await prisma.contact.findUniqueOrThrow({ where: { id }, include: { firm: true } });
+  const contact = await prisma.contact.findUniqueOrThrow({ where: { id }, include: { entity: true } });
 
-  if (!contact.firm.domain) {
-    return NextResponse.json({ error: "Firm has no resolved domain." }, { status: 400 });
+  if (!contact.entity.domain) {
+    return NextResponse.json({ error: "Entity has no resolved domain." }, { status: 400 });
   }
 
   const [first, ...rest] = contact.name.split(" ");
   const last = rest.join(" ") || first;
 
   try {
-    const result = await findEmail({ domain: contact.firm.domain, firstName: first, lastName: last });
+    const result = await findEmail({ domain: contact.entity.domain, firstName: first, lastName: last });
     const updated = await prisma.contact.update({
       where: { id },
       data: { email: result.email, emailStatus: result.status, emailSource: result.source },

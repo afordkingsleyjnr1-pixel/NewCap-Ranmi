@@ -21,7 +21,7 @@ interface ProjectRow {
   dueDate: string | null;
   owner: { id: string; name: string };
   members: Array<{ user: { id: string; name: string } }>;
-  firms: Array<{ firmId: string }>;
+  entities: Array<{ entityId: string }>;
   tasks: Array<{ id: string; status: "open" | "done"; dueDate: string | null }>;
 }
 
@@ -51,7 +51,7 @@ export default function ProjectsPage() {
 
   async function deleteProject(e: MouseEvent, id: string, name: string) {
     e.stopPropagation();
-    if (!confirm(`Delete project "${name}"? Firms and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
+    if (!confirm(`Delete project "${name}"? Entities and contacts stay in the database; tasks stay in the main Tasks module, just unlinked from this project.`)) return;
     await fetch(`/api/projects/${id}`, { method: "DELETE" });
     load();
   }
@@ -61,7 +61,7 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-text-primary">Projects</h1>
-          <p className="text-sm text-text-secondary">Group firms, contacts, tasks, and team members around one initiative</p>
+          <p className="text-sm text-text-secondary">Group entities, contacts, tasks, and team members around one initiative</p>
         </div>
         <Button size="sm" onClick={() => setCreateOpen(true)}>
           <Plus className="h-3.5 w-3.5" /> Create Project
@@ -111,7 +111,7 @@ export default function ProjectsPage() {
                     {p.description && <p className="line-clamp-2 text-xs text-text-secondary">{p.description}</p>}
                     <div className="flex flex-wrap items-center gap-3 text-xs text-text-secondary">
                       <span className="flex items-center gap-1">
-                        <Building2 className="h-3.5 w-3.5" /> {p.firms.length} firm{p.firms.length === 1 ? "" : "s"}
+                        <Building2 className="h-3.5 w-3.5" /> {p.entities.length} entity{p.entities.length === 1 ? "" : "s"}
                       </span>
                       <span className="flex items-center gap-1">
                         <ListChecks className="h-3.5 w-3.5" /> {openTasks} open · {doneTasks} done

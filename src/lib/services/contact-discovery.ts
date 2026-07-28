@@ -2,19 +2,19 @@ import { runWebResearch, extractJson } from "@/lib/anthropic";
 import { rankByCapitalMarketsPriority } from "./contact-ranking";
 
 // Section 5.5 — Contact & Email Enrichment, steps 1-6. This is the standalone
-// "Find Contact" call used on demand (the drawer button, or when Add Firm's
-// combined research call — firm-core-research.ts — found no usable contacts).
-// It is NOT run automatically as part of Add Firm anymore; that path now gets
+// "Find Contact" call used on demand (the drawer button, or when Add Entity's
+// combined research call — entity-core-research.ts — found no usable contacts).
+// It is NOT run automatically as part of Add Entity anymore; that path now gets
 // contacts from the same combined call as domain/AUM/classification to save
-// a full extra Claude call per firm.
+// a full extra Claude call per entity.
 const CONTACT_SYSTEM_PROMPT = `You are a business-development research analyst identifying the best-fit capital-raising contact(s) at an institutional investment manager, for a capital introductions platform.
 
 Follow this sequence:
-1. Search the firm's own site (Team, About, Leadership, Investor Relations, Capital Markets, Capital Formation, Fundraising pages) for named people and titles.
+1. Search the entity's own site (Team, About, Leadership, Investor Relations, Capital Markets, Capital Formation, Fundraising pages) for named people and titles.
 2. The single highest priority: find anyone whose title contains the words "Capital Markets", "Capital Introductions", or "Capital Formation" — at ANY seniority level (Analyst, Associate, VP, Director, Head, Managing Director, Partner, etc. all count equally). A "Director of Capital Markets" and an "Associate, Capital Formation" both outrank a "Head of Investor Relations" who has none of those three phrases in their title. Search explicitly for these three phrases before anything else.
-3. Only if nobody at the firm has one of those three phrases in their title, fall back to the next-best capital-raising contact: Head of Investor Relations > Head of Business Development / BD > Fundraising lead > any senior IR/BD-adjacent title.
-4. Go beyond the firm's website: press releases, LinkedIn, industry directories, conference speaker bios, news coverage.
-5. Include alternate/secondary contacts after the primary one if you find other people who do the same kind of work (capital markets, capital introductions, capital formation, IR, BD, fundraising) at the firm.
+3. Only if nobody at the entity has one of those three phrases in their title, fall back to the next-best capital-raising contact: Head of Investor Relations > Head of Business Development / BD > Fundraising lead > any senior IR/BD-adjacent title.
+4. Go beyond the entity's website: press releases, LinkedIn, industry directories, conference speaker bios, news coverage.
+5. Include alternate/secondary contacts after the primary one if you find other people who do the same kind of work (capital markets, capital introductions, capital formation, IR, BD, fundraising) at the entity.
 
 Respond with strict JSON only, shaped as:
 {"contacts": [{"name": "...", "title": "...", "linkedin_url": "... or null", "source_description": "...", "rank": 1}]}
@@ -29,7 +29,7 @@ export interface DiscoveredContact {
 }
 
 export async function discoverContacts(params: { firmName: string; domain: string | null }): Promise<DiscoveredContact[]> {
-  const user = `Firm: ${params.firmName}${params.domain ? `\nWebsite: ${params.domain}` : ""}\nFind the best-fit capital markets / fundraising contact(s).`;
+  const user = `Entity: ${params.firmName}${params.domain ? `\nWebsite: ${params.domain}` : ""}\nFind the best-fit capital markets / fundraising contact(s).`;
   const raw = await runWebResearch({ system: CONTACT_SYSTEM_PROMPT, user, maxTokens: 1536, maxUses: 3 });
   const parsed = extractJson<{
     contacts?: Array<{ name?: string; title?: string; linkedin_url?: string; source_description?: string; rank?: number }>;

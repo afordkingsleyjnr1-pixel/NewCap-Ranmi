@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
 
 // Manual contact entry — the research pipeline / Find Contact can come back
-// empty for firms with no public team page (common for small, private
+// empty for entities with no public team page (common for small, private
 // managers), and until now there was no way to add a contact the user
 // already knows about by hand.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -20,12 +20,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
 
-  const existingCount = await prisma.contact.count({ where: { firmId: id, removedAt: null } });
+  const existingCount = await prisma.contact.count({ where: { entityId: id, removedAt: null } });
   const email = typeof body.email === "string" && body.email.trim() ? body.email.trim() : null;
 
   const contact = await prisma.contact.create({
     data: {
-      firmId: id,
+      entityId: id,
       name,
       title: typeof body.title === "string" && body.title.trim() ? body.title.trim() : null,
       email,

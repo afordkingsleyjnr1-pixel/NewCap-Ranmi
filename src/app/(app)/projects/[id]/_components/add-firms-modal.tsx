@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Pill } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { TaxonomyPicker } from "../../../firms/_components/taxonomy-picker";
+import { TaxonomyPicker } from "../../../entities/_components/taxonomy-picker";
 import { useTaxonomy } from "@/lib/hooks/use-taxonomy";
 
 const PAGE_SIZE = 50;
@@ -22,13 +22,13 @@ interface FirmOption {
 
 type Mode = "search" | "taxonomy";
 
-// A firm matches a taxonomy selection if it has any of the selected
+// A entity matches a taxonomy selection if it has any of the selected
 // children under a selected parent — or, if a parent is selected with no
 // children checked yet, any presence under that parent at all. Strategy
 // and Focus Area selections are independent filters that both narrow the
 // result when both are set (AND across categories, OR within a category,
 // so filtering by strategy alone, focus area alone, or both all work) —
-// same semantics as the Firms Database grid filters.
+// same semantics as the Entities Database grid filters.
 function matchesTaxonomy(firmTaxonomy: Record<string, string[]>, selection: Record<string, string[]>): boolean {
   const parents = Object.keys(selection);
   if (parents.length === 0) return true;
@@ -56,7 +56,7 @@ export function AddFirmsModal({
 }) {
   const { strategies: STRATEGIES_TAXONOMY, focusAreas: FOCUS_AREAS_TAXONOMY } = useTaxonomy();
   const [mode, setMode] = useState<Mode>("search");
-  const [firms, setFirms] = useState<FirmOption[]>([]);
+  const [entities, setFirms] = useState<FirmOption[]>([]);
   const [search, setSearch] = useState("");
   const [strategies, setStrategies] = useState<Record<string, string[]>>({});
   const [focusAreas, setFocusAreas] = useState<Record<string, string[]>>({});
@@ -67,11 +67,11 @@ export function AddFirmsModal({
 
   useEffect(() => {
     if (open) {
-      fetch("/api/firms")
+      fetch("/api/entities")
         .then((r) => r.json())
         .then((d) =>
           setFirms(
-            (d.firms ?? []).map((f: any) => ({
+            (d.entities ?? []).map((f: any) => ({
               id: f.id,
               name: f.name,
               hqLocation: f.hqLocation,
@@ -90,13 +90,13 @@ export function AddFirmsModal({
     }
   }, [open]);
 
-  const notInProject = useMemo(() => firms.filter((f) => !existingFirmIds.includes(f.id)), [firms, existingFirmIds]);
+  const notInProject = useMemo(() => entities.filter((f) => !existingFirmIds.includes(f.id)), [entities, existingFirmIds]);
 
   const hasTaxonomySelection = Object.keys(strategies).length > 0 || Object.keys(focusAreas).length > 0;
   const hasSearchTerm = search.trim().length > 0;
 
   // Nothing shows until the user actually searches or picks a taxonomy
-  // filter — with a large firm database, listing everything by default
+  // filter — with a large entity database, listing everything by default
   // is exactly the "crowded, not user friendly" problem being fixed here.
   const matching =
     mode === "search"
@@ -137,10 +137,10 @@ export function AddFirmsModal({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/projects/${projectId}/firms`, { method: "POST", body: JSON.stringify({ firmIds: Array.from(selected) }) });
+      const res = await fetch(`/api/projects/${projectId}/entities`, { method: "POST", body: JSON.stringify({ firmIds: Array.from(selected) }) });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to add firms");
+        throw new Error(data.error ?? "Failed to add entities");
       }
       onAdded();
       onOpenChange(false);
@@ -152,7 +152,7 @@ export function AddFirmsModal({
   }
 
   return (
-    <Modal open={open} onOpenChange={onOpenChange} title="Add Firms to Project" widthClassName="max-w-3xl">
+    <Modal open={open} onOpenChange={onOpenChange} title="Add Entities to Project" widthClassName="max-w-3xl">
       <div className="space-y-4">
         <div className="flex gap-1 rounded-md border border-border bg-page p-1 text-sm font-medium">
           <button
@@ -172,7 +172,7 @@ export function AddFirmsModal({
         {mode === "search" ? (
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-secondary" />
-            <Input placeholder="Search firms already in your database…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 pl-9" />
+            <Input placeholder="Search entities already in your database…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-10 pl-9" />
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 rounded-md border border-border p-3">
@@ -224,11 +224,11 @@ export function AddFirmsModal({
             <p className="p-4 text-sm text-text-secondary">
               {mode === "search"
                 ? hasSearchTerm
-                  ? "No matching firms."
-                  : "Type a firm name to search your database."
+                  ? "No matching entities."
+                  : "Type a entity name to search your database."
                 : hasTaxonomySelection
-                  ? "No matching firms."
-                  : "Pick a strategy and/or focus area above to see matching firms."}
+                  ? "No matching entities."
+                  : "Pick a strategy and/or focus area above to see matching entities."}
             </p>
           )}
           {paged.map((f) => (
@@ -263,7 +263,7 @@ export function AddFirmsModal({
               Cancel
             </Button>
             <Button onClick={submit} disabled={loading || selected.size === 0}>
-              {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add {selected.size > 0 ? `${selected.size} ` : ""}Firm{selected.size === 1 ? "" : "s"}
+              {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Add {selected.size > 0 ? `${selected.size} ` : ""}Entity{selected.size === 1 ? "" : "s"}
             </Button>
           </div>
         </div>

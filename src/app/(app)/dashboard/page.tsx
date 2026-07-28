@@ -60,8 +60,8 @@ export default function DashboardPage() {
               <CardContent className="space-y-2">
                 {data.followUpsDue.length === 0 && <p className="text-sm text-text-secondary">Nothing due.</p>}
                 {data.followUpsDue.map((row: any) => (
-                  <Link key={row.id} href={`/firms?open=${row.firmId}`} className="flex items-center justify-between text-sm hover:text-accent">
-                    <span>{row.firm.name}</span>
+                  <Link key={row.id} href={`/entities?open=${row.entityId}`} className="flex items-center justify-between text-sm hover:text-accent">
+                    <span>{row.entity.name}</span>
                     <span className="text-text-secondary">{formatDate(row.nextFollowUpDate)}</span>
                   </Link>
                 ))}
@@ -75,8 +75,8 @@ export default function DashboardPage() {
               <CardContent className="space-y-2">
                 {data.awaitingTriage.length === 0 && <p className="text-sm text-text-secondary">Nothing to triage.</p>}
                 {data.awaitingTriage.map((t: any) => (
-                  <Link key={t.id} href={`/firms?open=${t.firmId}`} className="flex items-center justify-between text-sm hover:text-accent">
-                    <span>{t.firm.name}</span>
+                  <Link key={t.id} href={`/entities?open=${t.entityId}`} className="flex items-center justify-between text-sm hover:text-accent">
+                    <span>{t.entity.name}</span>
                     <span className="text-text-secondary">{formatDateTime(t.lastActivityAt)}</span>
                   </Link>
                 ))}
@@ -90,9 +90,9 @@ export default function DashboardPage() {
               <CardContent className="space-y-2">
                 {data.upcomingMeetings.length === 0 && <p className="text-sm text-text-secondary">No meetings scheduled.</p>}
                 {data.upcomingMeetings.map((m: any) => (
-                  <Link key={m.id} href={`/firms?open=${m.firmId}`} className="flex items-center justify-between text-sm hover:text-accent">
+                  <Link key={m.id} href={`/entities?open=${m.entityId}`} className="flex items-center justify-between text-sm hover:text-accent">
                     <span>
-                      {m.firm.name} {m.contact ? `— ${m.contact.name}` : ""}
+                      {m.entity.name} {m.contact ? `— ${m.contact.name}` : ""}
                     </span>
                     <span className="text-text-secondary">{formatDateTime(m.startTime)}</span>
                   </Link>
@@ -107,8 +107,8 @@ export default function DashboardPage() {
               <CardContent className="space-y-2">
                 {data.recentlyClosedWon.length === 0 && <p className="text-sm text-text-secondary">None yet.</p>}
                 {data.recentlyClosedWon.map((row: any) => (
-                  <Link key={row.id} href={`/firms?open=${row.firmId}`} className="flex items-center justify-between text-sm hover:text-accent">
-                    <span>{row.firm.name}</span>
+                  <Link key={row.id} href={`/entities?open=${row.entityId}`} className="flex items-center justify-between text-sm hover:text-accent">
+                    <span>{row.entity.name}</span>
                     <span className="text-text-secondary">{formatDate(row.stageChangedAt)}</span>
                   </Link>
                 ))}
@@ -124,7 +124,7 @@ export default function DashboardPage() {
               {data.recentActivity.map((a: any) => (
                 <div key={a.id} className="flex items-center justify-between border-b border-border py-2 text-sm last:border-0">
                   <span className="text-text-primary">
-                    <span className="font-medium">{a.firm.name}</span> — {a.body}
+                    <span className="font-medium">{a.entity.name}</span> — {a.body}
                   </span>
                   <span className="text-text-secondary">{formatDateTime(a.createdAt)}</span>
                 </div>

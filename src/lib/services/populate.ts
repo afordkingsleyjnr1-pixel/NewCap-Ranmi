@@ -2,26 +2,26 @@ import { prisma } from "@/lib/db";
 import { runWebResearch, extractJson, isAnthropicConfigured } from "@/lib/anthropic";
 import { formatAum } from "@/lib/utils";
 import { findDuplicate } from "./dedupe";
-import { runFirmResearchPipeline } from "./firm-pipeline";
+import { runFirmResearchPipeline } from "./entity-pipeline";
 import type { PopulateMode } from "@/generated/prisma";
 
 function candidateSearchPrompt(desiredCount: number, exclude?: string[]): string {
-  const excludeLine = exclude?.length ? `\nDo not repeat any of these already-found firms: ${exclude.join(", ")}.` : "";
+  const excludeLine = exclude?.length ? `\nDo not repeat any of these already-found entities: ${exclude.join(", ")}.` : "";
   return `You are a manager-sourcing research analyst for an institutional capital-introduction platform. Given a search brief describing an investment strategy, focus area, geography, and AUM band, find real institutional investment managers that plausibly match ALL of the criteria.
 
 Respond with strict JSON only:
-{"candidates": ["Firm Name 1", "Firm Name 2", ...]}
-Return up to ${desiredCount} real, currently-operating firm names. Never invent a firm. If you cannot find confident matches, return an empty array.${excludeLine}`;
+{"candidates": ["Entity Name 1", "Entity Name 2", ...]}
+Return up to ${desiredCount} real, currently-operating entity names. Never invent a entity. If you cannot find confident matches, return an empty array.${excludeLine}`;
 }
 
 // Cost/runaway-spend guards. Without these, "Populate the whole database"
-// runs one search call per EXISTING firm (cost scales with database size,
+// runs one search call per EXISTING entity (cost scales with database size,
 // not with what you're actually looking for), and any Populate run could
-// silently add and fully research dozens of firms from one click. Both are
+// silently add and fully research dozens of entities from one click. Both are
 // capped here rather than left to trust the model's own restraint.
 const MAX_DATABASE_WIDE_BRIEFS = 10;
 const MAX_FIRMS_ADDED_PER_RUN = 20;
-// User-facing "Number of firms" input (By Strategy & Focus Area mode) is
+// User-facing "Number of entities" input (By Strategy & Focus Area mode) is
 // clamped to this range — floor keeps a run meaningful, ceiling keeps a
 // single click from triggering a very large research bill.
 const MIN_TARGET_COUNT = 1;
@@ -50,7 +50,7 @@ function briefToPrompt(brief: SearchBrief): string {
   if (brief.targetMarkets?.length) lines.push(`Target markets: ${brief.targetMarkets.join(", ")}`);
   if (brief.aumBand?.min || brief.aumBand?.max) {
     lines.push(
-      `AUM band: $${brief.aumBand.min ?? 0} - $${brief.aumBand.max ?? "unbounded"}. This is a hard requirement, not a preference — only return firms whose current AUM you can find falls inside this exact range. Do not include a firm whose AUM is outside this band even if it otherwise matches well.`
+      `AUM band: $${brief.aumBand.min ?? 0} - $${brief.aumBand.max ?? "unbounded"}. This is a hard requirement, not a preference — only return entities whose current AUM you can find falls inside this exact range. Do not include a entity whose AUM is outside this band even if it otherwise matches well.`
     );
   }
   return lines.join("\n");
@@ -69,10 +69,10 @@ async function searchCandidates(brief: SearchBrief, desiredCount: number, exclud
 
 // by_criteria is the one mode with an explicit, user-set AUM band — the
 // candidate search prompt only ever treats it as a hint (the model can and
-// does surface firms outside it), so the actual researched AUM is checked
+// does surface entities outside it), so the actual researched AUM is checked
 // here and anything outside the band is discarded rather than added. Other
-// modes (Similar to a Firm, Across Entire Database) derive their own
-// AUM range from an existing firm rather than a user-set band, so this
+// modes (Similar to a Entity, Across Entire Database) derive their own
+// AUM range from an existing entity rather than a user-set band, so this
 // filter intentionally doesn't apply to them.
 function outsideAumBand(aumValue: number | null, band: { min?: number; max?: number } | null | undefined): boolean {
   if (!band || aumValue == null) return false;
@@ -81,10 +81,10 @@ function outsideAumBand(aumValue: number | null, band: { min?: number; max?: num
   return false;
 }
 
-// Find Similar Firms previously relied on the candidate-search prompt alone
+// Find Similar Entities previously relied on the candidate-search prompt alone
 // to stay "similar" (an AUM band hint plus copying the seed's exact
 // strategies/focus areas into the brief) — anything the model returned was
-// added outright, so a firm miles off on AUM or with only a token strategy
+// added outright, so a entity miles off on AUM or with only a token strategy
 // overlap could still get through. This scores each candidate against the
 // seed across five weighted factors and discards anything below threshold,
 // mirroring the outsideAumBand/discardFirm pattern already used for
@@ -150,36 +150,36 @@ function similarityScore(seed: SimilarityProfile, candidate: SimilarityProfile):
   );
 }
 
-// Cleans up a firm created moments ago by runFirmResearchPipeline once it's
+// Cleans up a entity created moments ago by runFirmResearchPipeline once it's
 // determined to be outside the requested AUM band — mirrors the deletion
 // order used by the Recently Deleted → Delete Permanently purge route.
-async function discardFirm(firmId: string): Promise<void> {
-  const contactIds = (await prisma.contact.findMany({ where: { firmId }, select: { id: true } })).map((c: { id: string }) => c.id);
+async function discardFirm(entityId: string): Promise<void> {
+  const contactIds = (await prisma.contact.findMany({ where: { entityId }, select: { id: true } })).map((c: { id: string }) => c.id);
   await prisma.$transaction([
     prisma.researchSource.deleteMany({
-      where: { OR: [{ entityType: "firm", entityId: firmId }, { entityType: "contact", entityId: { in: contactIds } }] },
+      where: { OR: [{ entityType: "entity", entityId: entityId }, { entityType: "contact", entityId: { in: contactIds } }] },
     }),
-    prisma.task.deleteMany({ where: { firmId } }),
-    prisma.contact.deleteMany({ where: { firmId } }),
-    prisma.crmStageRow.deleteMany({ where: { firmId } }),
-    prisma.firm.delete({ where: { id: firmId } }),
+    prisma.task.deleteMany({ where: { entityId } }),
+    prisma.contact.deleteMany({ where: { entityId } }),
+    prisma.entityStage.deleteMany({ where: { entityId } }),
+    prisma.entity.delete({ where: { id: entityId } }),
   ]);
 }
 
 export interface PopulateResult {
   runId: string;
-  firmsFound: number;
-  firmsAdded: number;
-  firmsSkippedDuplicate: number;
+  entitiesFound: number;
+  entitiesAdded: number;
+  entitiesSkippedDuplicate: number;
   addedFirms: { id: string; name: string }[];
   researchWarnings: string[];
 }
 
 export async function runPopulate(params: {
   mode: PopulateMode;
-  seedFirmId?: string;
+  seedEntityId?: string;
   criteria?: SearchBrief;
-  /** "Number of firms" the user asked for (By Strategy & Focus Area mode only). Clamped to [1, 50]; other modes ignore this and keep the flat 20-per-run cap. */
+  /** "Number of entities" the user asked for (By Strategy & Focus Area mode only). Clamped to [1, 50]; other modes ignore this and keep the flat 20-per-run cap. */
   targetCount?: number;
   triggeredById: string;
   onProgress?: (message: string) => void;
@@ -197,7 +197,7 @@ export async function runPopulate(params: {
   const run = await prisma.populateRun.create({
     data: {
       mode: params.mode,
-      seedFirmId: params.seedFirmId ?? null,
+      seedEntityId: params.seedEntityId ?? null,
       criteria: params.criteria ? (params.criteria as object) : undefined,
       triggeredById: params.triggeredById,
     },
@@ -207,7 +207,7 @@ export async function runPopulate(params: {
   let seedProfile: SimilarityProfile | null = null;
 
   if (params.mode === "similar_to_firm") {
-    const seed = await prisma.firm.findUniqueOrThrow({ where: { id: params.seedFirmId! } });
+    const seed = await prisma.entity.findUniqueOrThrow({ where: { id: params.seedEntityId! } });
     seedProfile = {
       strategies: seed.strategies as Record<string, string[]>,
       focusAreas: seed.focusAreas as Record<string, string[]>,
@@ -228,9 +228,9 @@ export async function runPopulate(params: {
     briefs = [params.criteria!];
   } else {
     // Capped and ordered by most-recently-added — a bounded, representative
-    // sample of current mandate focus instead of one search call per firm
+    // sample of current mandate focus instead of one search call per entity
     // ever added, which would make cost scale with database size.
-    const allFirms = await prisma.firm.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: MAX_DATABASE_WIDE_BRIEFS });
+    const allFirms = await prisma.entity.findMany({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, take: MAX_DATABASE_WIDE_BRIEFS });
     briefs = allFirms.map((f: { strategies: unknown; focusAreas: unknown; hqLocation: string | null; aumValue: unknown; targetMarkets: string[] }) => ({
       strategies: f.strategies as Record<string, string[]>,
       focusAreas: f.focusAreas as Record<string, string[]>,
@@ -240,7 +240,7 @@ export async function runPopulate(params: {
     }));
   }
 
-  emit(`Searching for candidate firms matching ${briefs.length > 1 ? `${briefs.length} briefs` : "your criteria"}…`);
+  emit(`Searching for candidate entities matching ${briefs.length > 1 ? `${briefs.length} briefs` : "your criteria"}…`);
   const allCandidateNames = new Set<string>();
   // Ask for a bit more than needed per round since some candidates will turn
   // out to be duplicates already in the database.
@@ -252,7 +252,7 @@ export async function runPopulate(params: {
       names.forEach((n) => allCandidateNames.add(n));
     } catch {
       // One brief's search failing (e.g. transient API error in database_wide
-      // mode with many firms) shouldn't abort the whole run — keep going.
+      // mode with many entities) shouldn't abort the whole run — keep going.
     }
   }
 
@@ -260,9 +260,9 @@ export async function runPopulate(params: {
   // specific target headcount, so both are worth an extra round or two of
   // searching (excluding names already found) if the first pass came up
   // short — previously only by_criteria retried, which is why Find Similar
-  // Firms (similar_to_firm) so often "failed on the first attempt" whenever
+  // Entities (similar_to_firm) so often "failed on the first attempt" whenever
   // that single web-search call came back thin or empty. database_wide runs
-  // one brief per existing firm and isn't asking for a specific headcount,
+  // one brief per existing entity and isn't asking for a specific headcount,
   // so it's intentionally left out of this retry.
   if (params.mode === "by_criteria" || params.mode === "similar_to_firm") {
     for (let round = 0; round < MAX_SEARCH_ROUNDS && allCandidateNames.size < maxFirmsToAdd; round++) {
@@ -279,17 +279,17 @@ export async function runPopulate(params: {
 
   emit(`Found ${allCandidateNames.size} candidate(s)${allCandidateNames.size > maxFirmsToAdd ? ` — adding the first ${maxFirmsToAdd}` : ""}.`);
 
-  let firmsAdded = 0;
-  let firmsSkippedDuplicate = 0;
+  let entitiesAdded = 0;
+  let entitiesSkippedDuplicate = 0;
   const addedFirms: { id: string; name: string }[] = [];
   const researchWarnings: string[] = [];
 
   for (const name of allCandidateNames) {
-    if (firmsAdded >= maxFirmsToAdd) break;
+    if (entitiesAdded >= maxFirmsToAdd) break;
 
     const dup = await findDuplicate({ name });
     if (dup) {
-      firmsSkippedDuplicate++;
+      entitiesSkippedDuplicate++;
       continue;
     }
     try {
@@ -297,12 +297,12 @@ export async function runPopulate(params: {
         name,
         sourceType: "comparable",
         populateRunId: run.id,
-        similarToFirmId: params.mode === "similar_to_firm" ? params.seedFirmId : null,
+        similarToFirmId: params.mode === "similar_to_firm" ? params.seedEntityId : null,
         onProgress: emit,
       });
 
       if (params.mode === "by_criteria" && outsideAumBand(outcome.aumValue, params.criteria?.aumBand)) {
-        await discardFirm(outcome.firmId);
+        await discardFirm(outcome.entityId);
         researchWarnings.push(
           `${name}: skipped — AUM ${formatAum(outcome.aumValue)} is outside the requested $${params.criteria?.aumBand?.min ? formatAum(params.criteria.aumBand.min) : "0"}–${params.criteria?.aumBand?.max ? formatAum(params.criteria.aumBand.max) : "unbounded"} band.`
         );
@@ -310,7 +310,7 @@ export async function runPopulate(params: {
       }
 
       if (params.mode === "similar_to_firm" && seedProfile) {
-        const candidate = await prisma.firm.findUniqueOrThrow({ where: { id: outcome.firmId } });
+        const candidate = await prisma.entity.findUniqueOrThrow({ where: { id: outcome.entityId } });
         const score = similarityScore(seedProfile, {
           strategies: candidate.strategies as Record<string, string[]>,
           focusAreas: candidate.focusAreas as Record<string, string[]>,
@@ -319,14 +319,14 @@ export async function runPopulate(params: {
           targetMarkets: candidate.targetMarkets,
         });
         if (score < SIMILARITY_THRESHOLD) {
-          await discardFirm(outcome.firmId);
-          researchWarnings.push(`${name}: skipped — only ${Math.round(score * 100)}% similar to the seed firm.`);
+          await discardFirm(outcome.entityId);
+          researchWarnings.push(`${name}: skipped — only ${Math.round(score * 100)}% similar to the seed entity.`);
           continue;
         }
       }
 
-      firmsAdded++;
-      addedFirms.push({ id: outcome.firmId, name: outcome.name });
+      entitiesAdded++;
+      addedFirms.push({ id: outcome.entityId, name: outcome.name });
       if (outcome.researchWarning) researchWarnings.push(`${name}: ${outcome.researchWarning}`);
     } catch (e) {
       researchWarnings.push(`${name}: failed to add (${e instanceof Error ? e.message : "unknown error"})`);
@@ -335,8 +335,8 @@ export async function runPopulate(params: {
 
   await prisma.populateRun.update({
     where: { id: run.id },
-    data: { firmsFound: allCandidateNames.size, firmsAdded, firmsSkippedDuplicate },
+    data: { entitiesFound: allCandidateNames.size, entitiesAdded, entitiesSkippedDuplicate },
   });
 
-  return { runId: run.id, firmsFound: allCandidateNames.size, firmsAdded, firmsSkippedDuplicate, addedFirms, researchWarnings };
+  return { runId: run.id, entitiesFound: allCandidateNames.size, entitiesAdded, entitiesSkippedDuplicate, addedFirms, researchWarnings };
 }
