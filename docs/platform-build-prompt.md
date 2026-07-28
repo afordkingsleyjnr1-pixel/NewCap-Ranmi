@@ -294,11 +294,107 @@ Mandate settings) is still the same fixed structure for every project.
 
 ---
 
-## 11. Background jobs
+## 11. Module: Projects (omitted from the first pass — corrected here)
 
+**Route:** `/projects`, `/projects/[id]` · **API:** `/api/projects`, `/api/projects/[id]`,
+`/api/projects/[id]/firms`, `/api/projects/[id]/taxonomy`, `/api/projects/[id]/bulk-email`
+
+A workspace grouping firms, contacts, tasks, and team members around one initiative —
+never a separate workflow: every CRM-affecting action taken from inside a project (send
+email, schedule meeting, change stage) goes through the exact same pipeline/task engine as
+everywhere else in the platform (`Task.projectId` links a task to a project without
+detaching it from the shared CRM machinery).
+
+- **Project detail page tabs**: Firms (the `ProjectFirm` join — add/remove firms from this
+  project via `add-firms-modal.tsx`/`select-firms-modal.tsx`), Taxonomy (§10 above —
+  describe/generate/review/confirm), Messages (project-scoped thread view, folded into
+  Overview), Members (`assign-member-modal.tsx` — add teammates via `ProjectMember`),
+  Actions (`actions-tab.tsx` — the project's task list/checklist, action-first then
+  firms-second ordering), Tasks (`task-detail-modal.tsx` — full tracker: status, progress
+  %, time spent, comments/activity feed, completion verification).
+- **Add Task** (`add-task-modal.tsx`): can create one task per selected firm in one
+  submission — all rows created together share a `batchId`, so the Actions tab can offer a
+  single "Send Email" button that executes across the whole batch at once.
+- **Bulk Email** (`bulk-email-modal.tsx` / `/api/projects/[id]/bulk-email`): compose once,
+  send to every firm's primary contact in the project (or a selected subset).
+- **All Tasks** (`/projects` page's cross-project tab, `all-tasks-tab.tsx`): every task
+  across every project the user can see, one flat list.
+- Project status: `active` / `on_hold` / `completed`; has its own start/due dates,
+  description, and free-text `type`.
+
+## 12. Meetings & Calendar integration
+
+No standalone "Meetings" nav item — meetings are scheduled from a firm's drawer and
+surfaced on the Dashboard ("Upcoming meetings this week") and Reports, but the mechanism
+(`src/lib/services/calendar.ts`) is its own subsystem:
+- **`createCalendarEvent`** — same OAuth connection as email (Gmail or Microsoft Graph),
+  extended with the Calendar scope; creates a real calendar event with a video/location
+  link, invites the firm's contact, and stores the provider's `providerEventId` back on the
+  `Meeting` row so later reschedule/cancel calls target the right event.
+- Meeting statuses: `scheduled` → `completed`/`canceled`; logging notes after a meeting
+  sets `notesLoggedAt` and (per the CRM Next Step engine, §6) unlocks the "Update Meeting
+  Outcome" action once the scheduled end time has passed.
+- `POST /api/cron/renew-watches` (see §14) keeps the same OAuth connection's Gmail/Outlook
+  push subscription alive — Calendar and reply-detection ride the one connection per user.
+
+## 13. Notification Center
+
+**Service:** `src/lib/services/notifications.ts` — the one shared mechanism every other
+feature writes to via `createNotification({ userId, type, body, relatedFirmId })`. Surfaced
+as a bell/dropdown in the topbar (not a sidebar nav item), with `isRead` tracked per
+notification. Fixed notification types: `reply_received`, `role_changed`,
+`firms_reassigned`, `email_needs_reauth`, `meeting_reminder`, `follow_up_due`.
+
+## 14. Real-time reply detection (webhooks) + background jobs
+
+- **`POST /api/webhooks/gmail`** — Gmail push notification endpoint via Google Cloud
+  Pub/Sub. Google delivers a base64-encoded `{emailAddress, historyId}` payload; the
+  handler looks up the `EmailConnection` by mailbox, fetches Gmail history since the last
+  known cursor, and calls `handleInboundReply()` (`reply-handling.ts`) to match the message
+  to its thread, flip `EmailThread.status` to `replied`, and fire a `reply_received`
+  notification.
+- **`POST /api/webhooks/outlook`** — equivalent for Microsoft Graph subscriptions.
+- **`syncAllRepliesThrottled()`** (`reply-sync.ts`) — the polling fallback used by
+  Messages/Dashboard on page load, independent of whether push webhooks are currently
+  working (defense in depth, not a replacement for them).
 - `POST /api/cron/follow-up-check` (daily) — Outreach Sent → Follow-Up Due → No Response
-  stage transitions based on elapsed time.
-- `POST /api/cron/renew-watches` (daily) — renews Gmail/Outlook reply-detection push
-  subscriptions before they expire.
+  stage transitions based on elapsed time (`AppSettings.followUpThresholdDays`).
+- `POST /api/cron/renew-watches` (daily) — renews both providers' push subscriptions before
+  they expire (Gmail watches and Outlook subscriptions both have finite lifetimes).
 
-Both accept a `CRON_SECRET` bearer token.
+Both cron endpoints accept a `CRON_SECRET` bearer token.
+
+## 15. Auth & Team onboarding
+
+**Routes:** `/login`, `/forgot-password`, `/reset-password`, `/accept-invite` ·
+**API:** `src/app/api/auth/*`
+
+- Session-based auth (`src/lib/session.ts`), password hashing, forgot/reset-password token
+  flow (`passwordResetToken`/`passwordResetExpiresAt` on `User`).
+- Google/Microsoft OAuth endpoints (`/api/auth/google`, `/api/auth/microsoft`) are reused
+  for both "connect this mailbox for outreach" and (implicitly) the same provider identity
+  — not a separate SSO system.
+- **Team invites** (`team-invite.ts`): inviting a user sends a real email — from the
+  *inviting admin's own connected mailbox*, same send pipeline as everything else — with an
+  accept-invite link. Notably this was previously broken (invites only ever returned the
+  link, never emailed it); fixed to actually send via `sendOutreachEmail`.
+- **Permissions** (`src/lib/permissions.ts`): fixed permission list — `edit_firms`,
+  `manage_contacts`, `send_outreach`, `manage_meetings`, `manage_tasks`, `run_populate`,
+  `export_data`, `manage_settings`, `manage_team` — assigned per `Role`, checked via
+  `requirePermission()`/`ForbiddenError` in API routes. Three seeded roles: Admin, Editor,
+  Viewer.
+
+## 16. Email attachments
+
+**Service:** `src/lib/services/attachment-store.ts` — attachments on sent/received
+messages are stored inline as base64 alongside the `EmailMessage`/`MessageDraft` row (no
+separate object storage), capped at ~8MB per file so a stray large attachment can't bloat
+the table. Above the cap, the file's metadata (filename/mimeType) still shows as a chip in
+the UI, just without a downloadable body — same "degrade gracefully, stay visible" pattern
+the platform uses elsewhere for research gaps.
+
+## 17. Deduplication
+
+**Service:** `src/lib/services/dedupe.ts` — `findDuplicate()` checks only `name` + `domain`
+before Add Firm/Populate creates a new row, preventing the same institution from being
+added twice under slightly different research runs.
