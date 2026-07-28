@@ -435,3 +435,29 @@ added twice under slightly different research runs.
   everything hanging off that `firmId` and frees the name/domain from future dedupe
   checks — unlike the soft-delete path (Recently Deleted), this is explicitly not
   reversible.
+
+## 19. Third pass — two more real gaps
+
+- **Populate actually has three modes, not two.** §7 only described "Find Similar" and
+  "By Criteria" — there's a third, **`database_wide`**, which runs the AI research/discovery
+  step without a seed firm or a user-set AUM band at all (broadest, least-constrained
+  discovery mode). Only `by_criteria` and `similar_to_firm` run off a single research brief
+  with a retry-on-thin-result safeguard — `database_wide` runs multiple independent
+  briefs, so one brief's search failing doesn't sink the whole run the way a single flaky
+  `similar_to_firm` call used to before this retry logic was added.
+- **There are two distinct, deliberately separate send pipelines, not one.** §4 (Messages)
+  and §6 (CRM Pipeline) each mentioned sending, but didn't make explicit that these are two
+  different code paths with two different behaviors:
+  - **`outreach.ts`'s `sendOutreachToFirm()`** — the CRM-tracked pipeline behind Send
+    Email/Send Follow-Up/Send Term Sheet (`kind: "email" | "follow_up" | "term_sheet"`).
+    Enforces the Do-Not-Contact gate (throws `OutreachError` if the firm's stage is
+    `do_not_contact`), drives CRM stage transitions, and completes the matching pending
+    task. Shared verbatim by `/api/outreach/send` and the Projects module's bulk-send
+    endpoint — sending from inside a project is never a separate implementation.
+  - **`free-form-send.ts`'s `sendFreeFormMessage()`** — deliberately bypasses all of that:
+    no Do-Not-Contact check, no forced stage change, no pending-task completion. Backs the
+    Messages compose modal, in-thread Reply, and sending a saved Draft. A firm/contact link
+    is optional and purely for record-keeping (shows on that firm's Activity tab) — sending
+    a free-form message never drives the pipeline. Supports `replyToThreadId` to send
+    within an existing thread's actual provider thread (lands as a real Gmail/Outlook
+    reply), same mechanism CRM follow-ups use.
