@@ -1,10 +1,24 @@
 # Ranmi — Comprehensive Platform Build Prompt
 
+**A naming note, read this first.** The word "Project" is overloaded across this doc's two
+halves, and they mean different things:
+- **§0–§24 (current state)**: the code, database, and UI today all use "Project" for a
+  secondary workspace that groups firms/contacts/tasks/team around one initiative — the
+  thing with Firms/Taxonomy/Messages/Members/Actions/Tasks tabs. **In this document, that
+  module is called "Tasks" instead**, to free up the word "Project" for the other meaning.
+  Code identifiers (the `Project` Prisma model, `ProjectMember`, `ProjectFirm`,
+  `/api/projects/*` routes) are unchanged in the actual codebase — only this document's
+  prose relabels them.
+- **§25–§26 (target architecture)**: "Project" means the *new* base container the whole
+  platform is meant to sit inside — driven by the classification/taxonomy/search criteria
+  the user gives it, per the earlier discussion in this project's history. Wherever you see
+  "Project" in this document, this is what it means.
+
 **This is a documentation deliverable only.** No code in this repo was changed to produce
 this document — it describes the real-estate capital-introduction platform exactly as it
 is built and running today (confirmed via `git diff` against the last known-good commit
 and a clean `tsc --noEmit`), module by module, plus how the Claude API/AI research engine
-works underneath all of it. Where the project-scoped taxonomy feature already generalizes
+works underneath all of it. Where the Tasks-workspace-scoped taxonomy feature already generalizes
 part of the system, that's called out — nothing else here reflects speculative future
 work.
 
@@ -27,10 +41,10 @@ calendar.
 ## 1. Data spine (how everything connects)
 
 ```
-Project ──< ProjectMember (team on this project)
-   │        ProjectFirm (which firms this project is tracking)
-   │        Project.taxonomy (AI-generated, project-scoped classification tree)
-   │        Task (project-linked checklist items)
+Tasks (code: Project) ──< ProjectMember (team on this Tasks workspace)
+   │        ProjectFirm (which firms this Tasks workspace is tracking)
+   │        Project.taxonomy (AI-generated, Tasks-workspace-scoped classification tree)
+   │        Task (checklist items linked to a Tasks workspace)
    │
 Firm ──< Contact (people at the firm)
    │  ──1 CrmStageRow (current pipeline stage, one per firm)
@@ -44,9 +58,9 @@ Firm ──< Contact (people at the firm)
 
 Every module below is a different view/action surface over this same spine — there's no
 separate database per module. A stage change on the CRM Pipeline kanban writes an
-`ActivityLog` row and can auto-create a `Task`; that same `Task` shows up in Project
-checklists; the same `Firm` row shows up in Firms Database, Contacts (via its `Contact`
-children), Reports (aggregated), and the Dashboard (counted/summarized).
+`ActivityLog` row and can auto-create a `Task`; that same `Task` shows up in a Tasks
+workspace's checklists; the same `Firm` row shows up in Firms Database, Contacts (via its
+`Contact` children), Reports (aggregated), and the Dashboard (counted/summarized).
 
 ---
 
@@ -79,9 +93,9 @@ Every AI-powered feature in the platform routes through one thin wrapper,
 ### `runCompletion(...)` — for reasoning-only prompts, no web access
 - Same model, no tools attached — used where a search call would just add unbilled-for
   cost with zero benefit.
-- Used by: **Classification Engine** (re-classifying against the taxonomy), **Project
-  taxonomy generation** (describe → generate → review → confirm), **Settings → generate
-  taxonomy children**.
+- Used by: **Classification Engine** (re-classifying against the taxonomy), **Tasks
+  workspace taxonomy generation** (describe → generate → review → confirm), **Settings →
+  generate taxonomy children**.
 
 ### `extractJson<T>(text)`
 Every AI response is prompted to return strict JSON; this helper pulls the first `{...}`
@@ -95,7 +109,7 @@ so callers can degrade gracefully instead of crashing on a malformed model respo
 | Standalone reclassify | `classification-engine.ts` | `runCompletion` (taxonomy validation, no web) |
 | Contact discovery (BD/capital-markets titles) | `contact-discovery.ts` | `runWebResearch` |
 | Populate — Find Similar / By Criteria | `populate.ts` | `runWebResearch` |
-| Project taxonomy generation | `api/projects/[id]/taxonomy/route.ts` | `runCompletion` |
+| Tasks workspace taxonomy generation | `api/projects/[id]/taxonomy/route.ts` (code still says "projects") | `runCompletion` |
 | Global taxonomy child-category generation | `api/taxonomy/generate-children/route.ts` | `runCompletion` |
 
 ---
@@ -142,7 +156,7 @@ visible to everyone since it isn't scoped to a firm owner).
 - **Drafts** are a separate `MessageDraft` model, not `EmailThread` rows — sending a draft
   creates the real thread/message via the same send pipeline (`email-send.ts` →
   Gmail API / Microsoft Graph) and deletes the draft.
-- **Filters**: project, firm, contact, owner, status, date range.
+- **Filters**: Tasks workspace, firm, contact, owner, status, date range.
 - Composing/sending always goes through the same OAuth "send-as-user" pipeline
   (`google-oauth.ts`/`microsoft-oauth.ts`) — one connection per user powers both send and
   calendar.
@@ -234,7 +248,7 @@ The core entity table — every institutional investment manager tracked, with:
   never overwrites a manually-touched classification on reclassify, only fills in
   genuinely new parent categories.
 - **Filters**: strategy/focus-area parent, CRM stage, source type, classification status,
-  domain resolution status, HQ region, Within-Mandate, project.
+  domain resolution status, HQ region, Within-Mandate, Tasks workspace.
 
 ---
 
@@ -273,53 +287,53 @@ Classification & Taxonomy, Recently Deleted
 
 ---
 
-## 10. The one already-generalized piece: per-project taxonomy
+## 10. The one already-generalized piece: per-Tasks-workspace taxonomy
 
 Every module above operates on the **global** Strategies/Focus Areas taxonomy by default.
-But `Project` already carries its own override:
+But a Tasks workspace (code: `Project` model) already carries its own override:
 
 ```
-Project.taxonomy            Json?     // { "Parent": ["Child", ...] }, project-scoped only
+Project.taxonomy            Json?     // { "Parent": ["Child", ...] }, scoped to one Tasks workspace only
 Project.taxonomyDescription String?
 Project.taxonomyConfirmedAt DateTime?
 ```
 
-Flow (`api/projects/[id]/taxonomy/route.ts`): describe the project in free text → AI
-generates a proposed taxonomy (`runCompletion`, no web search needed) → review/edit →
+Flow (`api/projects/[id]/taxonomy/route.ts`): describe the Tasks workspace in free text →
+AI generates a proposed taxonomy (`runCompletion`, no web search needed) → review/edit →
 confirm (persists to `Project.taxonomy`) → optionally regenerate with refinement notes.
-This is fully live today and is the one place the platform already lets a project define
-its own classification scheme instead of using the single global one — everything else
-described above (Firm's fixed fields, the CRM's fixed 13-stage pipeline, the AUM-based
-Mandate settings) is still the same fixed structure for every project.
+This is fully live today and is the one place the platform already lets a Tasks workspace
+define its own classification scheme instead of using the single global one — everything
+else described above (Firm's fixed fields, the CRM's fixed 13-stage pipeline, the
+AUM-based Mandate settings) is still the same fixed structure for every Tasks workspace.
 
 ---
 
-## 11. Module: Projects (omitted from the first pass — corrected here)
+## 11. Module: Tasks (code still calls this "Project" — see naming note)
 
 **Route:** `/projects`, `/projects/[id]` · **API:** `/api/projects`, `/api/projects/[id]`,
 `/api/projects/[id]/firms`, `/api/projects/[id]/taxonomy`, `/api/projects/[id]/bulk-email`
 
 A workspace grouping firms, contacts, tasks, and team members around one initiative —
-never a separate workflow: every CRM-affecting action taken from inside a project (send
-email, schedule meeting, change stage) goes through the exact same pipeline/task engine as
-everywhere else in the platform (`Task.projectId` links a task to a project without
-detaching it from the shared CRM machinery).
+never a separate workflow: every CRM-affecting action taken from inside a Tasks workspace
+(send email, schedule meeting, change stage) goes through the exact same pipeline/task
+engine as everywhere else in the platform (`Task.projectId` links a task to a Tasks
+workspace without detaching it from the shared CRM machinery).
 
-- **Project detail page tabs**: Firms (the `ProjectFirm` join — add/remove firms from this
-  project via `add-firms-modal.tsx`/`select-firms-modal.tsx`), Taxonomy (§10 above —
-  describe/generate/review/confirm), Messages (project-scoped thread view, folded into
+- **Tasks workspace detail page tabs**: Firms (the `ProjectFirm` join — add/remove firms
+  via `add-firms-modal.tsx`/`select-firms-modal.tsx`), Taxonomy (§10 above —
+  describe/generate/review/confirm), Messages (workspace-scoped thread view, folded into
   Overview), Members (`assign-member-modal.tsx` — add teammates via `ProjectMember`),
-  Actions (`actions-tab.tsx` — the project's task list/checklist, action-first then
-  firms-second ordering), Tasks (`task-detail-modal.tsx` — full tracker: status, progress
-  %, time spent, comments/activity feed, completion verification).
+  Actions (`actions-tab.tsx` — the workspace's task list/checklist, action-first then
+  firms-second ordering), Tasks detail (`task-detail-modal.tsx` — full tracker: status,
+  progress %, time spent, comments/activity feed, completion verification).
 - **Add Task** (`add-task-modal.tsx`): can create one task per selected firm in one
   submission — all rows created together share a `batchId`, so the Actions tab can offer a
   single "Send Email" button that executes across the whole batch at once.
 - **Bulk Email** (`bulk-email-modal.tsx` / `/api/projects/[id]/bulk-email`): compose once,
-  send to every firm's primary contact in the project (or a selected subset).
-- **All Tasks** (`/projects` page's cross-project tab, `all-tasks-tab.tsx`): every task
-  across every project the user can see, one flat list.
-- Project status: `active` / `on_hold` / `completed`; has its own start/due dates,
+  send to every firm's primary contact in the workspace (or a selected subset).
+- **All Tasks** (the Tasks list page's cross-workspace tab, `all-tasks-tab.tsx`): every
+  task across every Tasks workspace the user can see, one flat list.
+- Tasks workspace status: `active` / `on_hold` / `completed`; has its own start/due dates,
   description, and free-text `type`.
 
 ## 12. Meetings & Calendar integration
@@ -452,8 +466,8 @@ added twice under slightly different research runs.
     Email/Send Follow-Up/Send Term Sheet (`kind: "email" | "follow_up" | "term_sheet"`).
     Enforces the Do-Not-Contact gate (throws `OutreachError` if the firm's stage is
     `do_not_contact`), drives CRM stage transitions, and completes the matching pending
-    task. Shared verbatim by `/api/outreach/send` and the Projects module's bulk-send
-    endpoint — sending from inside a project is never a separate implementation.
+    task. Shared verbatim by `/api/outreach/send` and the Tasks module's bulk-send
+    endpoint — sending from inside a Tasks workspace is never a separate implementation.
   - **`free-form-send.ts`'s `sendFreeFormMessage()`** — deliberately bypasses all of that:
     no Do-Not-Contact check, no forced stage change, no pending-task completion. Backs the
     Messages compose modal, in-thread Reply, and sending a saved Draft. A firm/contact link
@@ -471,10 +485,10 @@ added twice under slightly different research runs.
   - `dataScope: "owned_firms_only"` roles → firms filtered to
     `{ crmStage: { ownerId: user.id } }` — note this scopes by **who owns the firm's CRM
     stage row**, not by who created/added the firm.
-  - Projects use a parallel but distinct rule: `all_firms` roles see every project;
-    everyone else sees only projects they own **or are a member of**
+  - Tasks workspaces use a parallel but distinct rule: `all_firms` roles see every
+    workspace; everyone else sees only workspaces they own **or are a member of**
     (`OR: [{ ownerId }, { members: { some: { userId } } }]`) — membership-based, not
-    stage-ownership-based, since a project has no single CRM stage to key off of.
+    stage-ownership-based, since a Tasks workspace has no single CRM stage to key off of.
   - `requirePermission()`/`ForbiddenError` is the separate, permission-based (not
     data-scope-based) gate used throughout the API routes referenced across this doc
     (`manage_settings`, `export_data`, etc.) — the two systems (what you can see vs. what
@@ -539,7 +553,7 @@ account owner rather than redirecting to `/login`.
   var (throws on startup/use if missing/wrong length) — never mentioned anywhere above.
 - **`prisma/seed.ts` seeds only Admin + Viewer roles** (no Editor), one user
   (`sydney@adcapital-partners.com` / `changeme123`), default Mandate ($1B–$15B) and
-  AppSettings — **no demo firms, contacts, or projects at all**. A fresh install is
+  AppSettings — **no demo firms, contacts, or Tasks workspaces at all**. A fresh install is
   data-empty by design, not partially empty.
 - **User deactivation is gated**: blocked until the caller supplies a replacement owner for
   any firms the user owns (`REASSIGN_REQUIRED` + count; new owner gets a
@@ -552,9 +566,10 @@ account owner rather than redirecting to `/login`.
   once active, since it's also the login identity.
 - **Editing a role fires `role_changed` to every user on that role**; deleting a role
   requires zero assigned users; the account owner's role can never be changed via edit-user.
-- **Project "Assign member" invites always create a Viewer-role account** for an unknown
-  email — different from the Settings → Team invite flow, which lets the inviter pick any
-  role. Project-level invite = fixed least-privilege; workspace-level invite = admin-chosen.
+- **A Tasks workspace's "Assign member" invites always create a Viewer-role account** for
+  an unknown email — different from the Settings → Team invite flow, which lets the
+  inviter pick any role. Tasks-workspace-level invite = fixed least-privilege;
+  account-level invite = admin-chosen.
 - **Contact deletion is conditional**: hard-deletes only if the contact has zero
   `EmailThread`s/`Meeting`s; otherwise soft-deletes (`removedAt`). Never documented — only
   the analogous firm pattern was.
@@ -564,7 +579,8 @@ account owner rather than redirecting to `/login`.
   "resolved"`, Find Contact/Find Email are blocked behind a banner; manually saving a
   domain force-sets the status to `resolved`.
 - **A right-click context menu on the Firms Database grid** (`firm-context-menu.tsx`) is an
-  entirely separate interaction surface: Edit, Add to Project, a nested Assign submenu
+  entirely separate interaction surface: Edit, Add to [Tasks workspace] (UI label still
+  reads "Add to Project"), a nested Assign submenu
   (owner, plus nested Add Task/Add Note), Find Similar Firms, Visit Website, Delete.
 - **"Clear Override"** is a real, dedicated clickable control for reversing a manual
   Within-Mandate override — not just an implied side effect of re-editing.
@@ -576,13 +592,13 @@ account owner rather than redirecting to `/login`.
   Populate, not a separate feature.
 - **`database_wide` Populate's actual bounds**: samples against the 10 most recently added
   firms, adds up to 20 new firms per run.
-- **Project-scoped Add Firm** (`ProjectAddFirmModal`) is a third variant of the same
-  pattern: by-name (auto-attaches to the project) or by-criteria using the *project's own*
-  taxonomy instead of the global one.
+- **Tasks-workspace-scoped Add Firm** (code: `ProjectAddFirmModal`) is a third variant of
+  the same pattern: by-name (auto-attaches to the workspace) or by-criteria using *that
+  workspace's own* taxonomy instead of the global one.
 - **Settings → Taxonomy's "Add Funds Category"** button (Strategies tab only): one click
   adds a "Funds" parent and immediately AI-generates its children via the same
   `generate-children` endpoint.
-- **The Projects Actions tab is under-described** — it's not just Bulk Email. It offers
+- **The Tasks workspace's Actions tab is under-described** — it's not just Bulk Email. It offers
   seven bulk actions over a multi-select of firms: Send Email/Follow-Up/Term Sheet,
   Schedule Meeting (single-selection only), Add Note (logs to every selected firm's
   Activity tab), Change CRM Stage, Assign Owner — all via `Promise.all` over the same
@@ -639,10 +655,10 @@ not just styling:
   and Populate's NDJSON streaming (§17/§18) — this is the actual visual component that
   progress events (`ndjson-server.ts`) render into, not just an abstract "progress bar."
 
-**Layout shell** (`src/components/layout/`) — `sidebar.tsx` (fixed nav — Dashboard,
-Projects, Messages, Contacts, CRM Pipeline, Firms Database, Reports, Settings — with
-active-route highlighting) and `topbar.tsx` (the Notification Center bell/dropdown, §13,
-lives here, not in the sidebar).
+**Layout shell** (`src/components/layout/`) — `sidebar.tsx` (fixed nav — Dashboard, Tasks
+[code/route: "Projects"], Messages, Contacts, CRM Pipeline, Firms Database, Reports,
+Settings — with active-route highlighting) and `topbar.tsx` (the Notification Center
+bell/dropdown, §13, lives here, not in the sidebar).
 
 ## 24. Deployment/infrastructure layer (previously entirely unaddressed)
 
@@ -697,18 +713,22 @@ current-state documentation instead of scattered across separate files.
 ## 25. The "Project as base" model
 
 Today's navigation (§0–§24) treats Firms Database, CRM Pipeline, and Contacts as global,
-top-level sidebar destinations, with Projects as a secondary grouping layered on top of one
-shared firm pool (§11, §10). The target model inverts this:
+top-level sidebar destinations, with Tasks (§11) as a secondary grouping layered on top of
+one shared firm pool. The target model introduces Project as a new, third concept — distinct
+from both the current Firms Database/CRM Pipeline and from Tasks — and inverts the
+navigation around it:
 
 **Project becomes the primary container, not a filter.** Clicking a project's name opens a
 self-contained workspace — its own entity database, its own pipeline, its own contacts —
 rather than a filtered view into globally shared tables. Concretely:
 
-- **Navigation**: "Projects" becomes the main entry point in the sidebar. There is no
-  longer a standalone global "Firms Database" or "CRM Pipeline" nav item — those surfaces
-  exist *inside* each project, scoped to it. (Global cross-project views — search, reports
-  — may still exist, but they roll up from project-scoped data rather than being the
-  primary way of navigating.)
+- **Navigation**: "Projects" becomes the main entry point in the sidebar, replacing today's
+  standalone global "Firms Database" and "CRM Pipeline" nav items — those surfaces exist
+  *inside* each project, scoped to it. (Global cross-project views — search, reports — may
+  still exist, but they roll up from project-scoped data rather than being the primary way
+  of navigating.) Today's "Tasks" module (§11) is a separate, pre-existing concept and
+  isn't necessarily replaced by this — a project may still contain its own task checklists,
+  same as today's Tasks workspaces do.
 - **What's inside a project once you click in**: an entity database (the generic
   replacement for Firms Database, §7), a pipeline (the generic replacement for CRM
   Pipeline, §6), contacts belonging to those entities, tasks, messages — the same
