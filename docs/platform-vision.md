@@ -68,6 +68,12 @@ investment managers keeps AUM as a field, an AUM-based classification, and a cap
 pipeline. A Project sourcing conference speakers has entirely different fields, classification
 criteria, and pipeline. Same engine underneath both.
 
+A note on naming: the existing "Projects" workspace feature in today's platform (task
+checklists, bulk email, team assignment) is renamed **Tasks** in this new platform, to
+free up the word "Project" for the concept described above. Tasks also loses its own
+separate taxonomy feature in the process — classification and taxonomy belong to Project
+now, not duplicated at the Tasks level.
+
 ## Why this works
 
 The expensive, hard-to-get-right part of a platform like this was never the CRM mechanics —

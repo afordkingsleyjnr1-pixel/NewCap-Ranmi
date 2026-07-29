@@ -124,6 +124,14 @@ only once every project has been migrated and the new system has been running in
 production long enough to trust it. Keeping the old code around costs nothing; deleting it
 too early is exactly the mistake already made once.
 
+**Also retire at this point**: the Tasks module's own per-workspace taxonomy override
+(`Project.taxonomy`/`taxonomyDescription`/`taxonomyConfirmedAt` on today's `Project`
+model, and `api/projects/[id]/taxonomy/route.ts`, plus the Taxonomy tab in the Tasks
+workspace UI). Taxonomy belongs exclusively to the new top-level Project concept now —
+Tasks doesn't get its own separate classification scheme. Don't remove this until Phase 6
+is done, same reasoning as everything else in this phase — but it should go, not stay
+duplicated alongside the new Project-level taxonomy.
+
 ## What to reuse vs. rebuild — quick reference
 
 | Layer | Action |

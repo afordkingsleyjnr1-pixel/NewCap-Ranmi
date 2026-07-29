@@ -752,6 +752,16 @@ classification, taxonomy, and stages. Today's "Tasks" module (§11) is a separat
 pre-existing concept, not replaced by this — a Project may still contain its own task
 checklists, same as today's Tasks workspaces do.
 
+**Tasks loses its own taxonomy feature.** Today (§10), the Tasks module (code: `Project`
+model) has its own optional per-workspace taxonomy override
+(`Project.taxonomy`/`Project.taxonomyDescription`/`Project.taxonomyConfirmedAt`,
+`api/projects/[id]/taxonomy/route.ts`). In the target model, taxonomy belongs exclusively
+to the new top-level Project concept — Tasks does not get its own separate taxonomy
+anymore. That feature (the whole per-Tasks-workspace override described in §10) should be
+removed, not carried forward or duplicated at the Tasks level. A Tasks workspace inherits
+whichever Project it's tracking checklists for; it doesn't define its own classification
+scheme.
+
 ## 26. What this means for the code documented in §0–§24
 
 Most of §0–§24 carries forward largely as-is, scoped differently: the AI research engine
