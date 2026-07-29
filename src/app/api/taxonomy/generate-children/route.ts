@@ -29,13 +29,19 @@ export async function POST(req: NextRequest) {
   const existing = await getTaxonomy(kind);
   const kindLabel = kind === "strategy" ? "Strategies" : "Focus Areas";
 
-  const raw = await runCompletion({
-    system: `You are a taxonomy designer for an institutional capital-introduction CRM's ${kindLabel} taxonomy. Given a parent group name and the rest of the existing taxonomy for context, propose 4 to 12 specific, non-overlapping child categories for that parent group.
+  let raw: string;
+  try {
+    raw = await runCompletion({
+      system: `You are a taxonomy designer for an institutional capital-introduction CRM's ${kindLabel} taxonomy. Given a parent group name and the rest of the existing taxonomy for context, propose 4 to 12 specific, non-overlapping child categories for that parent group.
 
 Respond with strict JSON only: {"children": ["Child 1", "Child 2", ...]}`,
-    user: `Existing ${kindLabel} taxonomy (for context, do not repeat categories that belong elsewhere):\n${JSON.stringify(existing, null, 2)}\n\nPropose child categories for the parent group: "${parentName}"`,
-    maxTokens: 1024,
-  });
+      user: `Existing ${kindLabel} taxonomy (for context, do not repeat categories that belong elsewhere):\n${JSON.stringify(existing, null, 2)}\n\nPropose child categories for the parent group: "${parentName}"`,
+      maxTokens: 1024,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: `Generation failed: ${message}` }, { status: 502 });
+  }
   const parsed = extractJson<{ children?: string[] }>(raw);
   const children = Array.isArray(parsed?.children) ? parsed.children.filter((c) => typeof c === "string" && c.trim()) : [];
   if (children.length === 0) return NextResponse.json({ error: "Could not generate child categories — try a more specific parent group name." }, { status: 502 });

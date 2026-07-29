@@ -48,8 +48,9 @@ export function ProjectTaxonomyTab({
         method: "POST",
         body: JSON.stringify({ description, refinement: isRegeneration ? refinement : undefined }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Failed to generate taxonomy");
+      if (!data.taxonomy) throw new Error("The server returned an unexpected response — please try again.");
       setDraft(data.taxonomy);
       setRefinement("");
     } catch (e) {
