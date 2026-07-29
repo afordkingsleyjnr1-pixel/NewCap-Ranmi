@@ -17,7 +17,9 @@ on.**
 ## The core idea: one engine, many projects
 
 A customer doesn't get a blank CRM they have to configure from scratch. They get the whole
-Ranmi engine — AI-powered research (Claude with live web search), an outreach pipeline with
+Ranmi engine — AI-powered research (Claude with two server-side tools: `web_search` to find
+relevant pages, and `web_fetch` to pull full page content directly instead of piecing
+things together from search snippets), an outreach pipeline with
 automatic follow-up tracking, a Next Step engine that tells the team what to do next,
 task/checklist management, Gmail/Outlook-integrated messaging, meeting scheduling, reporting
 — sitting ready, waiting on one thing: **what is this project actually looking for, and

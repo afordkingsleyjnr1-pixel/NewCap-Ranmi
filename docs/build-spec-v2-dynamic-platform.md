@@ -157,7 +157,7 @@ strategy, contacts). This becomes a **prompt generator**:
   needed per project.
 - Contact discovery, domain resolution, and "Populate" (Find Similar) all become
   parameterized by the project's EntityType/taxonomy rather than assuming "firm."
-- Keep the existing provider (Anthropic API w/ server-side web search) and Hunter.io for
+- Keep the existing provider (Anthropic API w/ server-side web_search + web_fetch) and Hunter.io for
   email enrichment; only the prompt construction and result-mapping layer changes.
 
 ---
@@ -198,7 +198,7 @@ across the org's active projects, weighted by each project's total activity volu
 
 - Next.js (App Router), TypeScript, Tailwind CSS
 - PostgreSQL + Prisma ORM
-- Anthropic API (Claude, server-side web search) for the dynamic research/classification
+- Anthropic API (Claude, server-side web_search + web_fetch) for the dynamic research/classification
   engine
 - Hunter.io for email enrichment
 - Gmail API / Microsoft Graph for outreach + calendar

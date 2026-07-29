@@ -101,7 +101,15 @@ side by side.
 ## Phase 5 — Wire the AI/automation engines to the new model, still in parallel
 
 Build `entity-core-research.ts` (prompt generated from `FieldDefinition.aiResearchable`
-fields, per `docs/build-spec-v2-dynamic-platform.md` §4) and a generic pipeline engine
+fields, per `docs/build-spec-v2-dynamic-platform.md` §4). **This must call
+`runWebResearch()` in `src/lib/anthropic.ts` (not `runCompletion()`)** — the function that
+enables both of Claude's server-side tools: `web_search` (finds relevant pages) and
+`web_fetch` (pulls full page content directly once a URL is known, avoiding extra search
+calls to piece together snippets from search results alone). This is the exact mechanism
+`firm-core-research.ts` already uses today (§2 of `platform-build-prompt.md`) and it must
+carry forward unchanged into the generic version — only the prompt content changes
+(generated from field definitions instead of hardcoded to Firm's columns), not the
+underlying tool wiring. Also build a generic pipeline engine
 (data-driven Next Step, auto-task/auto-checklist, terminal stages, branching — a
 reasonable starting sketch already exists from earlier in this project's history, but
 re-derive/re-verify it against the current schema rather than reusing old code blindly).
