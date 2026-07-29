@@ -28,27 +28,40 @@ how outreach works, how a reply gets tracked, how a deal moves through stages, h
 gets built — is already solved. The only thing left open is the lens: *who or what are we
 trying to find, and how do we tell them apart from each other?*
 
-## Onboarding: the classification and taxonomy engine
+## Onboarding: exactly three things get generated, nothing else changes
 
 When a user starts a new Project, before they add a single contact or send a single email,
 onboarding asks them to describe it in their own words — what they're trying to accomplish,
-who or what they're looking for. From that description, the platform's AI generates:
+who or what they're looking for. From that description, the platform's AI generates exactly
+three things, each of which is fixed/global on the real-estate platform today and becomes
+generated-per-Project instead:
 
-- **A taxonomy** — the classification tree this project will use to organize and qualify
-  what it finds (the same describe → generate → review → confirm flow already live in the
-  product today, extended to be the primary configuration step rather than an optional
-  override).
-- **What "the thing being tracked" is and what matters about it** — the fields, criteria,
-  and qualification rules relevant to this project's actual goal, generated from that same
-  description rather than assumed in advance.
-- **A pipeline** — the stages this project's outreach/relationship-building process moves
-  through, again shaped by what the user described, not a fixed one-size-fits-all list.
+1. **Classification** — the qualification criteria that decide whether something is a fit
+   (today, a single hardcoded global AUM band — "Within Mandate" — this becomes whatever
+   criteria actually matter for this Project, generated from the description rather than
+   assumed to be AUM).
+2. **Taxonomy** — the classification tree used to organize and tag what's found (the same
+   describe → generate → review → confirm flow already live in the product today for
+   per-project taxonomy, extended to be the primary configuration step rather than an
+   optional override).
+3. **CRM Stages** — the pipeline this Project's outreach/relationship-building process moves
+   through (today, one fixed global 13-stage list — this becomes a generated stage sequence
+   fitted to what the user described).
 
-Once that's confirmed, the engine takes over. Research, outreach, task automation, the Next
-Step engine, reporting — all of it runs exactly as built, now operating through the lens the
-user just defined. A project sourcing institutional investment managers gets AUM bands and a
-capital-raising pipeline. A project sourcing conference speakers gets speaker credentials and
-an entirely different pipeline. Same engine underneath both.
+**Nothing else changes.** The record structure itself (a tracked entity's name, contacts,
+activity log, messages, tasks), the research/enrichment engine, the reporting engine, and
+every other module described in the current-state documentation stay exactly as built —
+this is not a generic field-builder or a rebuild of the entity schema. It's specifically
+these three configuration surfaces moving from "one fixed global answer" to "generated per
+Project from what the user typed at onboarding." A new Project also starts with a clean,
+empty data set — no shared/seeded firms carried over from anywhere else.
+
+Once confirmed, the engine takes over. Research, outreach, task automation, the Next Step
+engine, reporting — all of it runs exactly as built, now operating through the classification,
+taxonomy, and stages the user just defined. A Project sourcing institutional investment
+managers keeps an AUM-based classification and a capital-raising pipeline. A Project sourcing
+conference speakers gets entirely different classification criteria and an entirely different
+pipeline. Same engine underneath both.
 
 ## Why this works
 

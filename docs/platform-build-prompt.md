@@ -710,59 +710,58 @@ real problems (a schema rewrite was implemented and had to be reverted). Nothing
 banner has been implemented. It exists here so the target model lives alongside the
 current-state documentation instead of scattered across separate files.
 
-## 25. The "Project as base" model
+## 25. The "Project as base" model — corrected, smaller scope
 
-Today's navigation (§0–§24) treats Firms Database, CRM Pipeline, and Contacts as global,
-top-level sidebar destinations, with Tasks (§11) as a secondary grouping layered on top of
-one shared firm pool. The target model introduces Project as a new, third concept — distinct
-from both the current Firms Database/CRM Pipeline and from Tasks — and inverts the
-navigation around it:
+**Correction to an earlier version of this section**: this section previously described a
+fully generic `EntityType`/`FieldDefinition` engine (arbitrary user-defined fields, any
+type, any project). That is not the target model. The actual scope is much smaller and
+more precise: **the entire real-estate platform's structure stays exactly as it is today
+— the Firm record's fields, Contacts, Messages, Tasks, Reports, Settings, the research
+engine, all of it, unchanged.** A Project is one full instance of that same, unmodified
+platform. **Exactly three things move from "one fixed global answer" to "generated per
+Project from what the user describes at onboarding," and nothing else changes:**
 
-**Project becomes the primary container, not a filter.** Clicking a project's name opens a
-self-contained workspace — its own entity database, its own pipeline, its own contacts —
-rather than a filtered view into globally shared tables. Concretely:
+1. **Classification** — today a single hardcoded global AUM Mandate band. Becomes
+   per-Project qualification criteria (may or may not be AUM — whatever the Project
+   actually needs).
+2. **Taxonomy** — today (§10) a project can *optionally* override the one global
+   taxonomy. In the target model, the Project's taxonomy is the taxonomy — generated at
+   onboarding, required rather than optional — same describe → generate → review →
+   confirm flow already live.
+3. **CRM Stages** — today a single fixed global 13-stage `CrmStage` enum (§6). Becomes a
+   generated, ordered stage sequence per Project, fitted to what the user described.
 
-- **Navigation**: "Projects" becomes the main entry point in the sidebar, replacing today's
-  standalone global "Firms Database" and "CRM Pipeline" nav items — those surfaces exist
-  *inside* each project, scoped to it. (Global cross-project views — search, reports — may
-  still exist, but they roll up from project-scoped data rather than being the primary way
-  of navigating.) Today's "Tasks" module (§11) is a separate, pre-existing concept and
-  isn't necessarily replaced by this — a project may still contain its own task checklists,
-  same as today's Tasks workspaces do.
-- **What's inside a project once you click in**: an entity database (the generic
-  replacement for Firms Database, §7), a pipeline (the generic replacement for CRM
-  Pipeline, §6), contacts belonging to those entities, tasks, messages — the same
-  functional surface area documented in §0–§24, just scoped to one project instead of
-  shared globally.
-- **Classification & taxonomy are project-owned, not global-with-an-override.** Today
-  (§10) a project can *optionally* override the one global taxonomy. In the target model,
-  the project's taxonomy is the taxonomy — generated from how the user describes the
-  project (the existing describe → generate → review → confirm flow, §10, is the direct
-  template/precedent for this) rather than falling back to a shared default.
-- **Search/discovery criteria are project-defined.** Populate's fixed AUM-band/
-  strategy/geography criteria (§7) become criteria drawn from whatever fields *this
-  project's* entity schema actually has — a project searching for people has no AUM
-  criterion to search by at all; a project searching for firms might define totally
-  different fields than another firms-tracking project.
-- **The entity schema and pipeline stages are themselves project-defined**, not fixed to
-  Firm's AUM/domain/strategy columns (§7) or the fixed 13-stage CrmStage enum (§6) — see
-  the fuller data-model design in `docs/build-spec-v2-dynamic-platform.md` (dynamic
-  EntityType/FieldDefinition/PipelineStage) and the automation-preservation approach
-  (auto-tasks, auto-checklists, terminal stages, branching) captured in the approved
-  implementation plan.
+A new Project also starts with a clean, empty data set — no shared/seeded firms carried
+over. That's the entire scope of change. There is no generic field-builder, no arbitrary
+field types, no `EntityType`/`FieldDefinition` engine — the Firm record's actual columns
+(domain, HQ, AUM-as-a-number, target markets, etc.) are unchanged; they may simply go
+unused for a Project whose classification doesn't need them (e.g. a recruiting-focused
+Project has no use for "AUM," and that's fine — the field isn't part of that Project's
+classification, not deleted or replaced).
+
+**Navigation**: "Projects" becomes the main entry point in the sidebar. Clicking into one
+opens the same Firms Database / CRM Pipeline / Contacts / Messages / Reports surfaces
+already documented in §0–§24, scoped to that Project's own classification, taxonomy, and
+stages — not a different UI, the *same* UI, now reading Project-specific configuration
+instead of the one global default. Today's "Tasks" module (§11) is a separate,
+pre-existing concept, not replaced by this — a Project may still contain its own task
+checklists, same as today's Tasks workspaces do.
 
 ## 26. What this means for the code documented in §0–§24
 
-Nearly everything below the data model in §0–§24 carries forward largely as-is, scoped
-differently: the AI research engine (§2) becomes prompt-generated from a project's field
-definitions instead of hardcoded to Firm's columns; the Next Step/automation engine (§6)
-becomes data-driven per project instead of a hardcoded switch; Messages, Meetings,
-Notifications, Tasks, auth, and the design system (§12, §13, §15, §23) are already
-reasonably generic and mostly just get repointed at project-scoped entities instead of a
-global firm pool. The concentrated rework is: the entity schema itself, the pipeline stage
-list itself, and the two biggest UI surfaces (entity table/drawer, pipeline kanban) — this
-mirrors the "skeleton vs. dynamic" split already captured in
-`docs/architecture-skeleton-vs-dynamic.md`.
+Nearly all of §0–§24 carries forward completely unchanged: the entity record shape, the
+research/enrichment engine's mechanics, Messages, Meetings, Notifications, Tasks, auth,
+reporting, the design system — none of it is rebuilt. The concentrated rework is narrow:
+`mandate.ts`'s hardcoded AUM-band logic becomes a per-Project qualification lookup;
+`crm-stages.ts`'s hardcoded 13-case switch becomes data-driven per Project's own stage
+list (preserving its automation power — auto follow-up tasks, the closing checklist,
+terminal stages — as configurable rules rather than hardcoded per literal stage name);
+and the kanban UI (§6) reads a Project's own stages instead of the fixed `CRM_STAGES`
+constant. `Project.taxonomy` (§10) needs no schema change at all, just to become the
+required first step instead of an optional override. This mirrors the "skeleton vs.
+dynamic" split in `docs/architecture-skeleton-vs-dynamic.md`, at the corrected, smaller
+scope described in §25 above — not the fuller dynamic-entity-engine version that document
+also discusses.
 
 **This section will need to move above the banner (become current-state documentation)
 once the target model is actually implemented — at that point, §0–§24 should be revised
