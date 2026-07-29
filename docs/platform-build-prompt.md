@@ -76,10 +76,12 @@ Every AI-powered feature in the platform routes through one thin wrapper,
 - Enables Claude's **server-side `web_search` tool** (`web_search_20250305`), capped by
   `maxUses` (default 4) — each search is billed per-use ($10/1,000), independent of token
   cost.
-- Optionally enables **`web_fetch`** (`web_fetch_20250910`, capped by `maxFetches`) — once
-  a search finds a firm's domain/page URLs, `web_fetch` pulls the full page content
-  directly instead of burning additional searches to piece together snippets. No per-call
-  fee; standard token cost for the fetched page.
+- **Always also enables `web_fetch`** (`web_fetch_20250910`, capped by `maxFetches`,
+  default 3) — unconditional, not optional: every `runWebResearch` call gets both tools
+  regardless of whether the caller specifies `maxFetches`. Once a search finds a firm's
+  domain/page URLs, `web_fetch` pulls the full page content directly instead of burning
+  additional searches to piece together snippets. No per-call fee; standard token cost
+  for the fetched page.
 - **Prompt caching**: the system prompt is sent with `cache_control: { type: "ephemeral" }`,
   and large byte-identical-across-calls content (e.g. the Strategies/Focus Areas taxonomy
   JSON) goes in via `cacheableSystemExtra` as its own cached block — repeated calls within

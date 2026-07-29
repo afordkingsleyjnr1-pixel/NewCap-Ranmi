@@ -23,20 +23,20 @@ export function getAnthropicClient(): Anthropic {
 export const RESEARCH_MODEL = "claude-haiku-4-5-20251001";
 
 /**
- * Runs a research-grade prompt with Claude's server-side web_search tool
- * (and, when `maxFetches` is set, web_fetch) enabled — used by domain
+ * Runs a research-grade prompt with Claude's server-side web_search and
+ * web_fetch tools BOTH always enabled, unconditionally — used by domain
  * resolution, AUM research, contact discovery, and Populate (Sections 5.1,
  * 5.3, 5.5, 5.10). Returns the final text response after Claude has
  * finished any tool-use turns.
  *
  * `maxUses` caps how many searches a single call can run — each search is
- * billed at $10/1,000 separately from token usage. `maxFetches`, when set,
- * adds the web_fetch tool (no per-call fee, just standard token cost for
- * the fetched page) so the model can search once to find the firm's
- * domain/page URLs, then fetch those pages directly for full content
- * instead of doing more searches to piece together partial snippets —
- * fewer total tool-use turns, and each turn's resent-history cost is what
- * actually drives spend, not the size of any one fetched page.
+ * billed at $10/1,000 separately from token usage. `maxFetches` (default 3
+ * if the caller doesn't specify one) caps web_fetch calls — no per-call fee,
+ * just standard token cost for the fetched page — so the model can search
+ * once to find the firm's domain/page URLs, then fetch those pages directly
+ * for full content instead of doing more searches to piece together partial
+ * snippets — fewer total tool-use turns, and each turn's resent-history cost
+ * is what actually drives spend, not the size of any one fetched page.
  *
  * `cacheableSystemExtra` is for large, byte-identical-across-calls content
  * (e.g. the Strategies/Focus Areas taxonomy JSON) — it's sent as its own
@@ -70,20 +70,21 @@ export async function runWebResearch(params: {
     systemBlocks.push({ type: "text", text: params.cacheableSystemExtra, cache_control: { type: "ephemeral" } });
   }
 
+  // Both tools are always enabled — web_search and web_fetch are not optional
+  // extras, every runWebResearch call gets both regardless of whether the
+  // caller specifies maxFetches.
   const tools: Anthropic.Messages.Tool[] = [
     {
       type: "web_search_20250305",
       name: "web_search",
       max_uses: params.maxUses ?? 4,
     } as unknown as Anthropic.Messages.Tool,
-  ];
-  if (params.maxFetches) {
-    tools.push({
+    {
       type: "web_fetch_20250910",
       name: "web_fetch",
-      max_uses: params.maxFetches,
-    } as unknown as Anthropic.Messages.Tool);
-  }
+      max_uses: params.maxFetches ?? 3,
+    } as unknown as Anthropic.Messages.Tool,
+  ];
 
   // Research calls hit Anthropic's web_search/web_fetch tools, which can
   // transiently 429/529 under load — one retry with a short backoff turns
