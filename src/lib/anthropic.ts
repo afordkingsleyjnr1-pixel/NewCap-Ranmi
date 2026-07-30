@@ -77,7 +77,7 @@ export async function runWebResearch(params: {
     {
       type: "web_search_20250305",
       name: "web_search",
-      max_uses: params.maxUses ?? 4,
+      max_uses: params.maxUses ?? 2,
     } as unknown as Anthropic.Messages.Tool,
     {
       type: "web_fetch_20250910",
