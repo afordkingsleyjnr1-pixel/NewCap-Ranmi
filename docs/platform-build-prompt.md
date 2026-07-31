@@ -73,13 +73,17 @@ Every AI-powered feature in the platform routes through one thin wrapper,
 - Model: `claude-haiku-4-5-20251001` (cheaper per-token than Sonnet; the workload is
   research/JSON-extraction, not creative reasoning, so Haiku is the right cost/quality
   tradeoff here).
-- Enables Claude's **server-side `web_search` tool** (`web_search_20250305`), capped by
-  `maxUses` (default 2) — each search is billed per-use ($10/1,000), independent of token
-  cost.
-- **Always also enables `web_fetch`** (`web_fetch_20250910`, capped by `maxFetches`,
-  default 3) — unconditional, not optional: every `runWebResearch` call gets both tools
-  regardless of whether the caller specifies `maxFetches`. Once a search finds a firm's
-  domain/page URLs, `web_fetch` pulls the full page content directly instead of burning
+- The intended shape of every research call: **one `web_search` to locate the source,
+  then `web_fetch` to actually read it and extract data** — search finds the URL, fetch
+  extracts the content. Enforced via the tool caps, both unconditional (every call gets
+  both tools, not opt-in): **`web_search`** (`web_search_20250305`) capped by `maxUses`,
+  default **1** — each search is billed per-use ($10/1,000), independent of token cost, so
+  it's used once to find the source, not repeatedly. **`web_fetch`**
+  (`web_fetch_20250910`) capped by `maxFetches`, default **2** — every call site in the
+  codebase (`firm-core-research.ts`, `classification-engine.ts`, `contact-discovery.ts`,
+  `populate.ts`) explicitly sets `maxUses: 1, maxFetches: 2` to match this ratio exactly,
+  rather than relying on the shared default alone. Once the search finds a firm's
+  domain/page URL, `web_fetch` pulls the full page content directly instead of burning
   additional searches to piece together snippets. No per-call fee; standard token cost
   for the fetched page.
 - **Prompt caching**: the system prompt is sent with `cache_control: { type: "ephemeral" }`,

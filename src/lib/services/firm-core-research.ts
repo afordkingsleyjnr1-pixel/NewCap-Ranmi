@@ -128,8 +128,8 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
     cacheableSystemExtra: taxonomyReference,
     user: `Research and classify this investment manager: ${params.firmName}`,
     maxTokens: 3072,
-    maxUses: 2,
-    maxFetches: 4,
+    maxUses: 1,
+    maxFetches: 2,
   });
   const parsed = extractJson<{
     domain?: string | null;
