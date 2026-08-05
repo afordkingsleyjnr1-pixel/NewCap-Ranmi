@@ -12,6 +12,7 @@ export function AccountSettingsTab() {
   const [mandate, setMandate] = useState<{ aumMin: string; aumMax: string } | null>(null);
   const [appSettings, setAppSettings] = useState<any>(null);
   const [hunterKey, setHunterKey] = useState("");
+  const [tavilyKey, setTavilyKey] = useState("");
   const [savingMandate, setSavingMandate] = useState(false);
   const [savingApp, setSavingApp] = useState(false);
   const [reclassifying, setReclassifying] = useState(false);
@@ -38,7 +39,11 @@ export function AccountSettingsTab() {
     try {
       const res = await fetch("/api/settings/app", {
         method: "PATCH",
-        body: JSON.stringify({ followUpThresholdDays: appSettings.followUpThresholdDays, hunterApiKey: hunterKey || undefined }),
+        body: JSON.stringify({
+          followUpThresholdDays: appSettings.followUpThresholdDays,
+          hunterApiKey: hunterKey || undefined,
+          tavilyApiKey: tavilyKey || undefined,
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -46,6 +51,7 @@ export function AccountSettingsTab() {
         return;
       }
       setHunterKey("");
+      setTavilyKey("");
       const refreshed = await fetch("/api/settings/app").then((r) => r.json());
       setAppSettings(refreshed);
       setAppSaveSuccess(true);
@@ -109,11 +115,16 @@ export function AccountSettingsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Hunter.io & Follow-Up Threshold</CardTitle>
+          <CardTitle>Research Integrations</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {appSettings && (
             <>
+              <div>
+                <Label>Tavily API Key {appSettings.tavilyKeyConfigured && <span className="text-status-green">(configured)</span>}</Label>
+                <Input type="password" placeholder="••••••••••••" value={tavilyKey} onChange={(e) => setTavilyKey(e.target.value)} />
+                <p className="text-xs text-text-secondary mt-1">For web search & content extraction in firm research. Get it at <a href="https://tavily.com" target="_blank" className="underline">tavily.com</a></p>
+              </div>
               <div>
                 <Label>Hunter.io API Key {appSettings.hunterKeyConfigured && <span className="text-status-green">(configured)</span>}</Label>
                 <Input type="password" placeholder="••••••••••••" value={hunterKey} onChange={(e) => setHunterKey(e.target.value)} />

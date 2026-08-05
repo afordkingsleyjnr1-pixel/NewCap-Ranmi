@@ -377,9 +377,10 @@ model MandateSettings {
 }
 
 model AppSettings {
-  id                    Int    @id @default(1)
-  hunterApiKeyEncrypted String? @map("hunter_api_key_encrypted")
-  followUpThresholdDays Int    @default(7) @map("follow_up_threshold_days")
+  id                      Int    @id @default(1)
+  hunterApiKeyEncrypted   String? @map("hunter_api_key_encrypted")
+  tavilyApiKeyEncrypted   String? @map("tavily_api_key_encrypted")
+  followUpThresholdDays   Int    @default(7) @map("follow_up_threshold_days")
 
   @@map("app_settings")
 }

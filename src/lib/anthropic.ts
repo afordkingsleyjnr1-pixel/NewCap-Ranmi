@@ -122,10 +122,22 @@ export async function runWebResearch(params: {
  * Plain completion, no web_search tool — for prompts that only need the
  * model's own reasoning (e.g. generating a taxonomy structure from a
  * natural-language brief), where a search call would just be unbilled-for
- * cost with no benefit.
+ * cost with no benefit. Supports cacheableSystemExtra for large, repeated
+ * blocks like taxonomy references.
  */
-export async function runCompletion(params: { system: string; user: string; maxTokens?: number }): Promise<string> {
+export async function runCompletion(params: {
+  system: string;
+  user: string;
+  maxTokens?: number;
+  cacheableSystemExtra?: string;
+}): Promise<string> {
   const anthropic = getAnthropicClient();
+
+  const systemBlocks: Anthropic.Messages.TextBlockParam[] = [{ type: "text", text: params.system, cache_control: { type: "ephemeral" } }];
+  if (params.cacheableSystemExtra) {
+    systemBlocks.push({ type: "text", text: params.cacheableSystemExtra, cache_control: { type: "ephemeral" } });
+  }
+
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     if (attempt > 0) await sleep(1500);
@@ -133,7 +145,7 @@ export async function runCompletion(params: { system: string; user: string; maxT
       const response = await anthropic.messages.create({
         model: RESEARCH_MODEL,
         max_tokens: params.maxTokens ?? 2048,
-        system: params.system,
+        system: systemBlocks,
         messages: [{ role: "user", content: params.user }],
       });
       return response.content
