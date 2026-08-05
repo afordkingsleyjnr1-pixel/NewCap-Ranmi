@@ -204,8 +204,9 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
         maxTokens: 2048,
       });
     } catch (tavilyError) {
-      // Tavily failed — fall through to web_search/web_fetch
-      console.warn("Tavily research failed, falling back to web_search/web_fetch:", tavilyError);
+      // Tavily path failed (could be Tavily API or Claude reasoning). Fall back to web_search/web_fetch.
+      const errorMsg = tavilyError instanceof Error ? tavilyError.message : String(tavilyError);
+      console.warn("[researchFirmCore] Tavily path error (Tavily API or Claude reasoning failed):", errorMsg);
       raw = await runWebResearch({
         system: CORE_RESEARCH_SYSTEM_PROMPT,
         cacheableSystemExtra: taxonomyReference,
