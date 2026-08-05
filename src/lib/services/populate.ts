@@ -61,7 +61,8 @@ async function searchCandidates(brief: SearchBrief, desiredCount: number, exclud
     system: candidateSearchPrompt(desiredCount, exclude),
     user: briefToPrompt(brief),
     maxTokens: 1024,
-    maxUses: 4,
+    maxUses: 1,
+    maxFetches: 2,
   });
   const parsed = extractJson<{ candidates?: string[] }>(raw);
   return Array.isArray(parsed?.candidates) ? parsed.candidates.filter((c) => typeof c === "string") : [];

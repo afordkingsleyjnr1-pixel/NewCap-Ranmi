@@ -81,11 +81,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const refinement = body.refinement ? `\n\nRefinement notes from the user for this regeneration: ${body.refinement}` : "";
 
-  const raw = await runCompletion({
-    system: taxonomyPrompt(),
-    user: `Project brief: ${description}${refinement}`,
-    maxTokens: 1536,
-  });
+  // The Claude call can throw (rate limit, auth error, network blip) — without
+  // this catch, the exception propagates as an unhandled 500 with no
+  // guaranteed JSON body, which surfaces to the client as a raw
+  // "Unexpected end of JSON input" parse error instead of a real message.
+  let raw: string;
+  try {
+    raw = await runCompletion({
+      system: taxonomyPrompt(),
+      user: `Project brief: ${description}${refinement}`,
+      maxTokens: 1536,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    return NextResponse.json({ error: `Taxonomy generation failed: ${message}` }, { status: 502 });
+  }
+
   const parsed = extractJson<{ taxonomy?: Record<string, string[]> }>(raw);
   if (!parsed?.taxonomy || typeof parsed.taxonomy !== "object") {
     return NextResponse.json({ error: "Could not generate a taxonomy from that description — try rephrasing it." }, { status: 502 });

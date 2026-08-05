@@ -8,18 +8,22 @@ import { isAnthropicConfigured } from "@/lib/anthropic";
 import { isHunterConfigured } from "@/lib/services/hunter";
 import { isGoogleConfigured } from "@/lib/services/google-oauth";
 import { isMicrosoftConfigured } from "@/lib/services/microsoft-oauth";
+import { getTavilyApiKey } from "@/lib/services/settings-encryption";
 
 export async function GET() {
   const user = await getCurrentUser();
   if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   const settings = await getAppSettings();
   const hunterConfigured = await isHunterConfigured();
+  const tavilyConfigured = !!(await getTavilyApiKey());
   return NextResponse.json({
     followUpThresholdDays: settings.followUpThresholdDays,
     hunterKeyConfigured: hunterConfigured,
+    tavilyKeyConfigured: tavilyConfigured,
     integrations: {
       anthropic: isAnthropicConfigured(),
       hunter: hunterConfigured,
+      tavily: tavilyConfigured,
       google: isGoogleConfigured(),
       microsoft: isMicrosoftConfigured(),
     },
@@ -38,6 +42,7 @@ export async function PATCH(req: NextRequest) {
   const data: Record<string, unknown> = {};
   if ("followUpThresholdDays" in body) data.followUpThresholdDays = body.followUpThresholdDays;
   if (body.hunterApiKey) data.hunterApiKeyEncrypted = encryptSecret(body.hunterApiKey);
+  if (body.tavilyApiKey) data.tavilyApiKeyEncrypted = encryptSecret(body.tavilyApiKey);
 
   await prisma.appSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
   return NextResponse.json({ ok: true });

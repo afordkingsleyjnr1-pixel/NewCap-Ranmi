@@ -9,6 +9,8 @@
     "src/app/api/settings/reclassify-all/route.ts": { "maxDuration": 300 },
     "src/app/api/firms/[id]/find-contact/route.ts": { "maxDuration": 60 },
     "src/app/api/firms/[id]/reclassify/route.ts": { "maxDuration": 60 },
-    "src/app/api/contacts/[id]/find-email/route.ts": { "maxDuration": 60 }
+    "src/app/api/contacts/[id]/find-email/route.ts": { "maxDuration": 60 },
+    "src/app/api/projects/[id]/taxonomy/route.ts": { "maxDuration": 60 },
+    "src/app/api/taxonomy/generate-children/route.ts": { "maxDuration": 60 }
   }
 }

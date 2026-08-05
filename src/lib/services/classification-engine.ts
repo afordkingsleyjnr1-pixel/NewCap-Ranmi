@@ -61,7 +61,7 @@ export async function classifyFirm(params: {
     user: userMessage,
     maxTokens: 2048,
     maxUses: 1,
-    maxFetches: 3,
+    maxFetches: 2,
   });
   const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
 
