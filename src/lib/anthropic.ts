@@ -130,6 +130,7 @@ export async function runCompletion(params: {
   user: string;
   maxTokens?: number;
   cacheableSystemExtra?: string;
+  model?: string;
 }): Promise<string> {
   const anthropic = getAnthropicClient();
 
@@ -143,7 +144,7 @@ export async function runCompletion(params: {
     if (attempt > 0) await sleep(1500);
     try {
       const response = await anthropic.messages.create({
-        model: RESEARCH_MODEL,
+        model: params.model ?? RESEARCH_MODEL,
         max_tokens: params.maxTokens ?? 2048,
         system: systemBlocks,
         messages: [{ role: "user", content: params.user }],

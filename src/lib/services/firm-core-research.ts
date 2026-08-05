@@ -5,6 +5,7 @@ import { getBothTaxonomies } from "./taxonomy-store";
 import { rankByCapitalMarketsPriority } from "./contact-ranking";
 import { getTavilyApiKey } from "./settings-encryption";
 import { searchWithTavily } from "./tavily-search";
+import { extractDomain, extractHqLocation, extractContacts, combineExtractions } from "./extract-firm-basics";
 
 // Cost lever: domain resolution, AUM research, classification, AND contact
 // discovery used to be four separate Claude calls, each with its own
@@ -154,6 +155,23 @@ Respond with strict JSON only, no prose:
 }
 If you cannot confidently classify anything, use {} for strategies/focus_areas. If you cannot find a contact, use [].`;
 
+// Haiku-optimized prompt for classification + AUM only (domain/contacts extracted via rules)
+const HAIKU_CLASSIFICATION_PROMPT = `You are a research analyst. Extract only TWO things from the provided content:
+
+1. AUM: Find the clearest, most current AUM figure. Never fabricate. If nothing reliable found, use null with confidence "unconfirmed".
+2. CLASSIFICATION: Map the firm's strategies and focus areas to the provided taxonomy. Only classify what they ACTIVELY do today. Use ONLY parent/child names from taxonomy.
+
+Respond with strict JSON only:
+{
+  "aum_value_usd": <number or null>,
+  "aum_as_of_date": "<YYYY-MM-DD or null>",
+  "aum_confidence": "confirmed" | "dated" | "unconfirmed",
+  "aum_source_description": "<page/section or null>",
+  "strategies": {"Parent Group": ["Child Strategy", ...]},
+  "focus_areas": {"Parent Group": ["Child Focus Area", ...]}
+}
+Use {} for empty strategies/focus_areas if unsure.`;
+
 export async function researchFirmCore(params: { firmName: string }): Promise<FirmCoreResearchResult> {
   const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
 
@@ -161,10 +179,11 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
   const tavilyApiKey = await getTavilyApiKey();
   console.log("[researchFirmCore] Tavily API key available:", !!tavilyApiKey);
   let raw: string;
+  let extractedBasics: { domain: string | null; hqLocation: string | null; contacts: Array<{ name: string; title: string | null }> } | null = null;
 
   if (tavilyApiKey) {
-    // TAVILY PATH: Search + reasoning on cleaned content
-    console.log("[researchFirmCore] Using Tavily path for firm:", params.firmName);
+    // HYBRID PATH: Tavily search + rule-based extraction + Haiku classification
+    console.log("[researchFirmCore] Using hybrid Tavily+Haiku path for firm:", params.firmName);
     try {
       const results = await searchWithTavily({
         query: `${params.firmName} investment manager AUM assets headquarters`,
@@ -192,21 +211,31 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
         };
       }
 
-      // Format Tavily results for Claude
+      console.log("[researchFirmCore] Tavily search succeeded. Extracting basics...");
+      // Step 1: Extract domain, HQ location, and contacts using rules (free)
+      const extracted = combineExtractions(results, params.firmName);
+      console.log("[researchFirmCore] Extracted domain:", extracted.domain, "contacts:", extracted.contacts.length);
+      extractedBasics = extracted;
+
+      // Step 2: Use Haiku for classification and AUM only (cheap)
       const contentBlock = results
-        .map((r) => `# ${r.title}\nSource: ${r.url}\nRelevance: ${(r.score * 100).toFixed(0)}%\n\n${r.content}`)
+        .map((r) => `# ${r.title}\nSource: ${r.url}\n\n${r.content}`)
         .join("\n\n---\n\n");
 
+      console.log("[researchFirmCore] Calling Haiku for classification and AUM extraction...");
       raw = await runCompletion({
-        system: TAVILY_RESEARCH_PROMPT,
+        model: "claude-3-5-haiku-20241022", // Use Haiku for 10x cost reduction
+        system: HAIKU_CLASSIFICATION_PROMPT,
         cacheableSystemExtra: taxonomyReference,
-        user: `Research this firm and extract data from the provided content:\n\n${contentBlock}\n\nFirm name: ${params.firmName}`,
-        maxTokens: 2048,
+        user: `Extract AUM and classify from this content:\n\n${contentBlock}`,
+        maxTokens: 512, // Much smaller since only classification + AUM
       });
+
+      console.log("[researchFirmCore] Haiku classification complete");
     } catch (tavilyError) {
-      // Tavily path failed (could be Tavily API or Claude reasoning). Fall back to web_search/web_fetch.
+      // Tavily path failed. Fall back to web_search/web_fetch.
       const errorMsg = tavilyError instanceof Error ? tavilyError.message : String(tavilyError);
-      console.warn("[researchFirmCore] Tavily path error (Tavily API or Claude reasoning failed):", errorMsg);
+      console.warn("[researchFirmCore] Hybrid path error, falling back to web_search/web_fetch:", errorMsg);
       raw = await runWebResearch({
         system: CORE_RESEARCH_SYSTEM_PROMPT,
         cacheableSystemExtra: taxonomyReference,
@@ -241,10 +270,25 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
     contacts?: Array<{ name?: string; title?: string; linkedin_url?: string; source_description?: string; rank?: number }>;
   }>(raw);
 
-  const domainStatus =
-    parsed?.domain_status === "resolved" || parsed?.domain_status === "ambiguous" || parsed?.domain_status === "unresolved"
-      ? parsed.domain_status
-      : "unresolved";
+  // For hybrid path: merge extracted basics with parsed classification
+  let domain = parsed?.domain ?? null;
+  let hqLocation = parsed?.hq_location ?? null;
+  let contactsFromParse = parsed?.contacts ?? [];
+
+  if (extractedBasics) {
+    // Hybrid path: use extracted values + parsed classification
+    domain = extractedBasics.domain ?? domain;
+    hqLocation = extractedBasics.hqLocation ?? hqLocation;
+    // Use extracted contacts if parse didn't provide them
+    if (!contactsFromParse || contactsFromParse.length === 0) {
+      contactsFromParse = extractedBasics.contacts.map((c) => ({
+        name: c.name,
+        title: c.title ?? undefined,
+      }));
+    }
+  }
+
+  const domainStatus = domain ? "resolved" : "unresolved";
 
   const aumValue = typeof parsed?.aum_value_usd === "number" ? parsed.aum_value_usd : null;
   const aumConfidence = parsed?.aum_confidence === "confirmed" || parsed?.aum_confidence === "dated" ? parsed.aum_confidence : "unconfirmed";
@@ -253,11 +297,10 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
   const focusResult = validateTaxonomySelection(parsed?.focus_areas, focusAreasTaxonomy);
   const hasAnyClassification = Object.keys(stratResult.valid).length > 0 || Object.keys(focusResult.valid).length > 0;
 
-  // Contacts are only trustworthy if a real domain was resolved — discard
-  // anything the model returned otherwise rather than risk a hallucinated name.
+  // Contacts are only trustworthy if a real domain was resolved
   let contacts: CoreResearchContact[] = [];
-  if (domainStatus === "resolved" && Array.isArray(parsed?.contacts)) {
-    const mapped = parsed.contacts
+  if (domainStatus === "resolved" && Array.isArray(contactsFromParse)) {
+    const mapped = contactsFromParse
       .filter((c) => typeof c.name === "string" && c.name.trim().length > 0)
       .map((c, i) => ({
         name: c.name!.trim(),
@@ -271,9 +314,9 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
   }
 
   return {
-    domain: domainStatus === "resolved" ? parsed?.domain ?? null : null,
+    domain,
     domainStatus,
-    hqLocation: parsed?.hq_location ?? null,
+    hqLocation,
     aumValue,
     aumDisplay: formatAum(aumValue, aumConfidence),
     aumAsOf: parseAumAsOfDate(parsed?.aum_as_of_date),
