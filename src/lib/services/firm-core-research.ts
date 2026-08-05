@@ -224,7 +224,7 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
 
       console.log("[researchFirmCore] Calling Haiku for classification and AUM extraction...");
       raw = await runCompletion({
-        model: "claude-3-5-haiku-20241022", // Use Haiku for 10x cost reduction
+        model: "claude-haiku-4-5-20251001", // Latest Haiku for 10x cost reduction
         system: HAIKU_CLASSIFICATION_PROMPT,
         cacheableSystemExtra: taxonomyReference,
         user: `Extract AUM and classify from this content:\n\n${contentBlock}`,
