@@ -39,11 +39,21 @@ export async function PATCH(req: NextRequest) {
     throw e;
   }
   const body = await req.json();
+  console.log("[settings/app PATCH] Received body keys:", Object.keys(body));
   const data: Record<string, unknown> = {};
   if ("followUpThresholdDays" in body) data.followUpThresholdDays = body.followUpThresholdDays;
-  if (body.hunterApiKey) data.hunterApiKeyEncrypted = encryptSecret(body.hunterApiKey);
-  if (body.tavilyApiKey) data.tavilyApiKeyEncrypted = encryptSecret(body.tavilyApiKey);
+  if (body.hunterApiKey) {
+    console.log("[settings/app PATCH] Encrypting Hunter API key...");
+    data.hunterApiKeyEncrypted = encryptSecret(body.hunterApiKey);
+  }
+  if (body.tavilyApiKey) {
+    console.log("[settings/app PATCH] Encrypting Tavily API key, length:", body.tavilyApiKey.length);
+    data.tavilyApiKeyEncrypted = encryptSecret(body.tavilyApiKey);
+    console.log("[settings/app PATCH] Encrypted Tavily key length:", (data.tavilyApiKeyEncrypted as string).length);
+  }
 
-  await prisma.appSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  console.log("[settings/app PATCH] Upserting AppSettings with keys:", Object.keys(data));
+  const result = await prisma.appSettings.upsert({ where: { id: 1 }, create: { id: 1, ...data }, update: data });
+  console.log("[settings/app PATCH] Upsert complete. Result:", result);
   return NextResponse.json({ ok: true });
 }
