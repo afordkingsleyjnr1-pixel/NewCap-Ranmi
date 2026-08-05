@@ -159,10 +159,12 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
 
   // Try Tavily first (cheaper, faster). Fall back to web_search/web_fetch.
   const tavilyApiKey = await getTavilyApiKey();
+  console.log("[researchFirmCore] Tavily API key available:", !!tavilyApiKey);
   let raw: string;
 
   if (tavilyApiKey) {
     // TAVILY PATH: Search + reasoning on cleaned content
+    console.log("[researchFirmCore] Using Tavily path for firm:", params.firmName);
     try {
       const results = await searchWithTavily({
         query: `${params.firmName} investment manager AUM assets headquarters`,
@@ -215,6 +217,7 @@ export async function researchFirmCore(params: { firmName: string }): Promise<Fi
     }
   } else {
     // FALLBACK PATH: web_search/web_fetch (original behavior)
+    console.log("[researchFirmCore] No Tavily key available, using web_search fallback for firm:", params.firmName);
     raw = await runWebResearch({
       system: CORE_RESEARCH_SYSTEM_PROMPT,
       cacheableSystemExtra: taxonomyReference,

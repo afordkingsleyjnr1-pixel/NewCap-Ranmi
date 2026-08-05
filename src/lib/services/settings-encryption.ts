@@ -7,11 +7,17 @@ import { decryptSecret } from "@/lib/crypto";
  */
 export async function getTavilyApiKey(): Promise<string | null> {
   const settings = await prisma.appSettings.findUnique({ where: { id: 1 } });
-  if (!settings?.tavilyApiKeyEncrypted) return null;
+  console.log("[getTavilyApiKey] Settings fetched. tavilyApiKeyEncrypted exists:", !!settings?.tavilyApiKeyEncrypted);
+  if (!settings?.tavilyApiKeyEncrypted) {
+    console.log("[getTavilyApiKey] No encrypted key found in database");
+    return null;
+  }
   try {
-    return decryptSecret(settings.tavilyApiKeyEncrypted);
+    const decrypted = decryptSecret(settings.tavilyApiKeyEncrypted);
+    console.log("[getTavilyApiKey] Successfully decrypted key");
+    return decrypted;
   } catch (e) {
-    console.error("Failed to decrypt Tavily API key:", e);
+    console.error("[getTavilyApiKey] Failed to decrypt Tavily API key:", e);
     return null;
   }
 }
