@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { researchFirmCoreTavily } from "@/lib/services/firm-core-research-tavily";
 import { getTavilyApiKey } from "@/lib/services/settings-encryption";
-import { auth } from "@/lib/auth";
+import { requirePermission, ForbiddenError } from "@/lib/authz";
+import { getCurrentUser } from "@/lib/session";
 
 /**
  * POST /api/firms/research-tavily
@@ -22,7 +23,13 @@ import { auth } from "@/lib/auth";
  */
 export async function POST(request: NextRequest) {
   try {
-    await auth.admin();
+    const user = await getCurrentUser();
+    try {
+      await requirePermission(user, "edit_firms");
+    } catch (e) {
+      if (e instanceof ForbiddenError) return NextResponse.json({ error: e.message }, { status: 403 });
+      throw e;
+    }
 
     const { firmName } = await request.json();
     if (!firmName || typeof firmName !== "string") {

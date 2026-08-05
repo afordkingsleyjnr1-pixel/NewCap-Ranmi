@@ -1,5 +1,3 @@
-import type { Settings } from "@prisma/client";
-
 export interface TavilyResult {
   url: string;
   title: string;

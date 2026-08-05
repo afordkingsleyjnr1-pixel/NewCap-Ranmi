@@ -1,8 +1,10 @@
-import { runWebResearch, extractJson } from "@/lib/anthropic";
+import { runWebResearch, extractJson, runCompletion } from "@/lib/anthropic";
 import { formatAum } from "@/lib/utils";
 import { validateTaxonomySelection } from "@/lib/taxonomy";
 import { getBothTaxonomies } from "./taxonomy-store";
 import { rankByCapitalMarketsPriority } from "./contact-ranking";
+import { getTavilyApiKey } from "./settings-encryption";
+import { searchWithTavily } from "./tavily-search";
 
 // Cost lever: domain resolution, AUM research, classification, AND contact
 // discovery used to be four separate Claude calls, each with its own
@@ -15,6 +17,10 @@ import { rankByCapitalMarketsPriority } from "./contact-ranking";
 // separately cached system block (see cacheableSystemExtra in anthropic.ts)
 // since it's byte-identical across every firm — no reason to pay for it on
 // every single call.
+
+// TAVILY PATH (NEW, DEFAULT): Use Tavily API for search + Claude reasoning.
+// Costs ~3.5x less, no web tools needed.
+// FALLBACK PATH: If Tavily not configured, use web_search/web_fetch tools.
 const CORE_RESEARCH_SYSTEM_PROMPT = `You are a research analyst for an institutional capital-introduction platform. For the given investment manager, do ONE round of web research covering four things at once: (1) their official corporate website domain, (2) their current AUM, (3) a classification of their investment strategies and focus areas, (4) the best-fit capital-raising contact(s) at the firm.
 
 RESEARCH METHOD: Use web_search sparingly — ideally just once — to resolve the official domain and identify which of the firm's own pages (About, Investment Strategy, Investor Relations, Team/Leadership, News) are likely to have the AUM figure, the classification detail, and the contact names. Then use web_fetch to retrieve those pages directly and read the full content, rather than running additional searches to piece the answer together from snippets. Fetching the actual page gives you complete, reliable text for AUM figures and contact names — trust it over search-result snippets.
@@ -120,17 +126,104 @@ export interface FirmCoreResearchResult {
   contacts: CoreResearchContact[];
 }
 
+/**
+ * Tavily-specific prompt for reasoning on pre-fetched, cleaned content.
+ * Used when Tavily is configured; otherwise falls back to web_search prompt.
+ */
+const TAVILY_RESEARCH_PROMPT = `You are a research analyst for an institutional capital-introduction platform. You've been provided with cleaned web content about an investment manager. From this content, extract four things: (1) their official corporate website domain, (2) their current AUM, (3) a classification of their investment strategies and focus areas, (4) the best-fit capital-raising contact(s) at the firm.
+
+INSTRUCTIONS:
+- Read through the provided content carefully.
+- Extract the domain from URLs in the sources or from explicit domain mentions in the content.
+- Find the clearest, most current AUM figure from About/Overview/Investor Relations sections. If multiple dates are present, prefer the most recent. Never fabricate a number — if nothing reliable is found, aum_value_usd must be null and confidence "unconfirmed".
+- Classify strategies/focus areas based on what the firm ACTIVELY does today. Do NOT include anything mentioned only in thought-leadership, described as future opportunity, or based on single transactions. Use ONLY parent/child names from the taxonomy provided below.
+- Identify the best-fit capital-raising contact(s). Highest priority: titles containing "Capital Markets", "Capital Introductions", or "Capital Formation" (any seniority). Fall back to: Head of Investor Relations > Head of Business Development / BD > Fundraising lead > senior IR/BD titles. Return at most 3. Never invent a name.
+
+Respond with strict JSON only, no prose:
+{
+  "domain": "<domain.com or null>",
+  "domain_status": "resolved" | "ambiguous" | "unresolved",
+  "hq_location": "<city, state/country or null>",
+  "aum_value_usd": <number or null>,
+  "aum_as_of_date": "<YYYY-MM-DD or null>",
+  "aum_confidence": "confirmed" | "dated" | "unconfirmed",
+  "aum_source_description": "<page/section cited or null>",
+  "strategies": {"Parent Group": ["Child Strategy", ...]},
+  "focus_areas": {"Parent Group": ["Child Focus Area", ...]},
+  "contacts": [{"name": "...", "title": "...", "linkedin_url": "... or null", "source_description": "...", "rank": 1}]
+}
+If you cannot confidently classify anything, use {} for strategies/focus_areas. If you cannot find a contact, use [].`;
+
 export async function researchFirmCore(params: { firmName: string }): Promise<FirmCoreResearchResult> {
   const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
 
-  const raw = await runWebResearch({
-    system: CORE_RESEARCH_SYSTEM_PROMPT,
-    cacheableSystemExtra: taxonomyReference,
-    user: `Research and classify this investment manager: ${params.firmName}`,
-    maxTokens: 3072,
-    maxUses: 1,
-    maxFetches: 2,
-  });
+  // Try Tavily first (cheaper, faster). Fall back to web_search/web_fetch.
+  const tavilyApiKey = await getTavilyApiKey();
+  let raw: string;
+
+  if (tavilyApiKey) {
+    // TAVILY PATH: Search + reasoning on cleaned content
+    try {
+      const results = await searchWithTavily({
+        query: `${params.firmName} investment manager AUM assets headquarters`,
+        tavilyApiKey,
+        maxResults: 3,
+        searchDepth: "advanced",
+      });
+
+      if (results.length === 0) {
+        // No results — return empty research result
+        return {
+          domain: null,
+          domainStatus: "unresolved",
+          hqLocation: null,
+          aumValue: null,
+          aumDisplay: "Unknown",
+          aumAsOf: null,
+          aumConfidence: "unconfirmed",
+          aumSourceDescription: null,
+          strategies: {},
+          focusAreas: {},
+          classificationStatus: "needs_review",
+          droppedTags: [],
+          contacts: [],
+        };
+      }
+
+      // Format Tavily results for Claude
+      const contentBlock = results
+        .map((r) => `# ${r.title}\nSource: ${r.url}\nRelevance: ${(r.score * 100).toFixed(0)}%\n\n${r.content}`)
+        .join("\n\n---\n\n");
+
+      raw = await runCompletion({
+        system: TAVILY_RESEARCH_PROMPT,
+        cacheableSystemExtra: taxonomyReference,
+        user: `Research this firm and extract data from the provided content:\n\n${contentBlock}\n\nFirm name: ${params.firmName}`,
+        maxTokens: 2048,
+      });
+    } catch (tavilyError) {
+      // Tavily failed — fall through to web_search/web_fetch
+      console.warn("Tavily research failed, falling back to web_search/web_fetch:", tavilyError);
+      raw = await runWebResearch({
+        system: CORE_RESEARCH_SYSTEM_PROMPT,
+        cacheableSystemExtra: taxonomyReference,
+        user: `Research and classify this investment manager: ${params.firmName}`,
+        maxTokens: 3072,
+        maxUses: 1,
+        maxFetches: 2,
+      });
+    }
+  } else {
+    // FALLBACK PATH: web_search/web_fetch (original behavior)
+    raw = await runWebResearch({
+      system: CORE_RESEARCH_SYSTEM_PROMPT,
+      cacheableSystemExtra: taxonomyReference,
+      user: `Research and classify this investment manager: ${params.firmName}`,
+      maxTokens: 3072,
+      maxUses: 1,
+      maxFetches: 2,
+    });
+  }
   const parsed = extractJson<{
     domain?: string | null;
     domain_status?: string;
