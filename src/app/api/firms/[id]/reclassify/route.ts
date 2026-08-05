@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 import { requirePermission, ForbiddenError } from "@/lib/authz";
-import { classifyFirm, applyClassification } from "@/lib/services/classification-engine";
+import { classifyFirmHybrid, applyClassification } from "@/lib/services/classification-engine";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -15,7 +15,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const firm = await prisma.firm.findUniqueOrThrow({ where: { id } });
 
-  const result = await classifyFirm({
+  const result = await classifyFirmHybrid({
     firmName: firm.name,
     domain: firm.domain,
     strategyDetail: firm.strategyDetail,

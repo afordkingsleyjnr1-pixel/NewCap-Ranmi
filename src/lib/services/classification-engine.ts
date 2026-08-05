@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/db";
-import { runWebResearch, extractJson } from "@/lib/anthropic";
+import { runWebResearch, extractJson, runCompletion } from "@/lib/anthropic";
 import { validateTaxonomySelection } from "@/lib/taxonomy";
 import { getBothTaxonomies } from "@/lib/services/taxonomy-store";
+import { getTavilyApiKey } from "@/lib/services/settings-encryption";
+import { searchWithTavily } from "@/lib/services/tavily-search";
 
 // Section 5.4 — verbatim system prompt used by the Classification Engine.
 const CLASSIFICATION_SYSTEM_PROMPT = `You are an Institutional Investment Manager Classification Engine. Your purpose is to analyze investment managers and populate a structured database with consistent, standardized classifications. The objective is not to copy marketing language from a firm's website, but to interpret what the firm actually does and map it into the predefined taxonomy below. The database will be used as a professional institutional manager sourcing platform, so consistency and accuracy are more important than maximizing the number of tags.
@@ -77,6 +79,89 @@ export async function classifyFirm(params: {
     droppedTags: [...stratResult.dropped, ...focusResult.dropped],
     raw,
   };
+}
+
+/**
+ * Hybrid classification using Tavily + Haiku (90% cheaper than web_search).
+ * Used by Reclassify endpoint when Tavily is configured.
+ * Falls back to classifyFirm() if Tavily fails or not configured.
+ */
+export async function classifyFirmHybrid(params: {
+  firmName: string;
+  domain: string | null;
+  strategyDetail: string | null;
+}): Promise<ClassificationResult> {
+  const tavilyApiKey = await getTavilyApiKey();
+  console.log("[classifyFirmHybrid] Tavily key available:", !!tavilyApiKey);
+
+  // If no Tavily, fall back to web_search
+  if (!tavilyApiKey) {
+    console.log("[classifyFirmHybrid] No Tavily key, using web_search fallback");
+    return classifyFirm(params);
+  }
+
+  // Try Tavily path
+  try {
+    console.log("[classifyFirmHybrid] Using Tavily + Haiku for classification");
+    const { text: taxonomyReference, strategies: strategiesTaxonomy, focusAreas: focusAreasTaxonomy } = await buildTaxonomyReference();
+
+    // Search with Tavily
+    const query = [
+      params.firmName,
+      params.domain ? `site:${params.domain}` : "",
+      "investment strategy portfolio sectors",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const results = await searchWithTavily({
+      query,
+      tavilyApiKey,
+      maxResults: 3,
+      searchDepth: "advanced",
+    });
+
+    if (results.length === 0) {
+      console.log("[classifyFirmHybrid] No Tavily results, falling back to web_search");
+      return classifyFirm(params);
+    }
+
+    // Format content for Haiku
+    const contentBlock = results
+      .map((r) => `# ${r.title}\nSource: ${r.url}\n\n${r.content}`)
+      .join("\n\n---\n\n");
+
+    const classificationPrompt = `You are a Classification Engine. From the provided content about "${params.firmName}", extract ONLY the strategies and focus areas. Use ONLY the taxonomy names provided below. Respond with strict JSON only: {"strategies": {...}, "focus_areas": {...}}. If unsure, use empty objects.`;
+
+    console.log("[classifyFirmHybrid] Using Haiku for classification");
+    const raw = await runCompletion({
+      model: "claude-haiku-4-5-20251001",
+      system: classificationPrompt,
+      cacheableSystemExtra: taxonomyReference,
+      user: `Classify from this content:\n\n${contentBlock}`,
+      maxTokens: 512,
+    });
+
+    const parsed = extractJson<{ strategies?: unknown; focus_areas?: unknown }>(raw);
+
+    const stratResult = validateTaxonomySelection(parsed?.strategies, strategiesTaxonomy);
+    const focusResult = validateTaxonomySelection(parsed?.focus_areas, focusAreasTaxonomy);
+
+    const hasAny = Object.keys(stratResult.valid).length > 0 || Object.keys(focusResult.valid).length > 0;
+
+    console.log("[classifyFirmHybrid] Classification complete. Found", Object.keys(stratResult.valid).length, "strategy groups");
+
+    return {
+      strategies: stratResult.valid,
+      focusAreas: focusResult.valid,
+      status: hasAny ? "classified" : "needs_review",
+      droppedTags: [...stratResult.dropped, ...focusResult.dropped],
+      raw,
+    };
+  } catch (tavilyError) {
+    console.warn("[classifyFirmHybrid] Tavily path failed, falling back to web_search:", tavilyError);
+    return classifyFirm(params);
+  }
 }
 
 /**
